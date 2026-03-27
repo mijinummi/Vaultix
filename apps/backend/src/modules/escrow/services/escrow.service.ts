@@ -168,13 +168,13 @@ export class EscrowService {
     if (role === EscrowOverviewRole.DEPOSITOR) {
       qb.where('escrow.creatorId = :userId', { userId });
     } else if (role === EscrowOverviewRole.RECIPIENT) {
-      qb.where(`EXISTS (${recipientExistsSubquery})`, { userId });
+      qb.where(`EXISTS ${recipientExistsSubquery}`, { userId });
     } else {
       qb.where(
         new Brackets((overviewScope) => {
           overviewScope
             .where('escrow.creatorId = :userId', { userId })
-            .orWhere(`EXISTS (${recipientExistsSubquery})`, { userId });
+            .orWhere(`EXISTS ${recipientExistsSubquery}`, { userId });
         }),
       );
     }
@@ -872,28 +872,28 @@ export class EscrowService {
   ): Promise<Dispute> {
     const escrow = await this.findOne(escrowId);
 
-    if (escrow.status !== EscrowStatus.ACTIVE) {
-      throw new BadRequestException(
-        'Disputes can only be filed against active escrows',
-      );
-    }
-
-    // Only a buyer or seller party may file — arbitrators mediate, they don't file
-    const filingParty = escrow.parties?.find(
-      (p) => p.userId === userId && p.role !== PartyRole.ARBITRATOR,
-    );
-    if (!filingParty) {
-      throw new ForbiddenException(
-        'Only a buyer or seller party can file a dispute',
-      );
-    }
-
     const existing = await this.disputeRepository.findOne({
       where: { escrowId },
     });
     if (existing) {
       throw new ConflictException(
         'A dispute has already been filed for this escrow',
+      );
+    }
+
+    if (escrow.status !== EscrowStatus.ACTIVE) {
+      throw new BadRequestException(
+        'Disputes can only be filed against active escrows',
+      );
+    }
+
+    const isBuyer = escrow.creatorId === userId;
+    const filingParty = escrow.parties?.find(
+      (p) => p.userId === userId && p.role !== PartyRole.ARBITRATOR,
+    );
+    if (!isBuyer && !filingParty) {
+      throw new ForbiddenException(
+        'Only a buyer or seller party can file a dispute',
       );
     }
 

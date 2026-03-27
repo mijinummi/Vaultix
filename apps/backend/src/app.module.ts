@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
@@ -23,6 +23,8 @@ import { ApiKey } from './api-key/entities/api-key.entity';
 import { AdminAuditLog } from './modules/admin/entities/admin-audit-log.entity';
 import { Webhook } from './modules/webhook/webhook.entity';
 import { StellarEvent } from './modules/stellar/entities/stellar-event.entity';
+import { AdminModule } from './modules/admin/admin.module';
+import { StellarEventModule } from './modules/stellar/stellar-event.module';
 
 @Module({
   imports: [
@@ -52,9 +54,9 @@ import { StellarEvent } from './modules/stellar/entities/stellar-event.entity';
           Webhook,
           StellarEvent,
         ],
-        synchronize: false,
+        synchronize: process.env.NODE_ENV === 'test',
         migrations: [__dirname + '/migrations/*.ts'],
-        migrationsRun: true,
+        migrationsRun: process.env.NODE_ENV !== 'test',
       }),
       inject: [ConfigService],
     }),
@@ -62,11 +64,11 @@ import { StellarEvent } from './modules/stellar/entities/stellar-event.entity';
     UserModule,
     EscrowModule,
     StellarModule,
-    // AdminModule,
+    forwardRef(() => AdminModule),
     WebhookModule,
     NotificationsModule,
     ApiKeyModule,
-    // StellarEventModule,
+    forwardRef(() => StellarEventModule),
   ],
   controllers: [AppController],
   providers: [AppService],

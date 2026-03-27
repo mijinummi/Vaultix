@@ -37,7 +37,7 @@ import { ExpireEscrowDto } from '../dto/expire-escrow.dto';
 import { ProposeMilestoneChangeDto } from '../dto/milestone-change.dto';
 
 interface AuthenticatedRequest extends ExpressRequest {
-  user: { sub: string; walletAddress: string };
+  user: { userId: string; walletAddress: string };
 }
 
 @Controller('escrows')
@@ -52,7 +52,7 @@ export class EscrowController {
     @Body() dto: CreateEscrowDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    const userId = req.user.sub;
+    const userId = req.user.userId;
     const ipAddress = req.ip || req.socket?.remoteAddress;
     return this.escrowService.create(dto, userId, ipAddress);
   }
@@ -62,7 +62,7 @@ export class EscrowController {
     @Query() query: ListEscrowsDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    const userId = req.user.sub;
+    const userId = req.user.userId;
     return this.escrowService.findAll(userId, query);
   }
 
@@ -75,7 +75,7 @@ export class EscrowController {
     @Query() query: EscrowOverviewQueryDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    const userId = req.user.sub;
+    const userId = req.user.userId;
     return this.escrowService.findOverview(userId, query);
   }
 
@@ -92,7 +92,7 @@ export class EscrowController {
     @Body() dto: UpdateEscrowDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    const userId = req.user.sub;
+    const userId = req.user.userId;
     const ipAddress = req.ip || req.socket?.remoteAddress;
     return this.escrowService.update(id, dto, userId, ipAddress);
   }
@@ -104,7 +104,7 @@ export class EscrowController {
     @Body() dto: CancelEscrowDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    const userId = req.user.sub;
+    const userId = req.user.userId;
     const ipAddress = req.ip || req.socket?.remoteAddress;
     return this.escrowService.cancel(id, dto, userId, ipAddress);
   }
@@ -116,7 +116,7 @@ export class EscrowController {
     @Body() dto: ExpireEscrowDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    const userId = req.user.sub;
+    const userId = req.user.userId;
     const ipAddress = req.ip || req.socket?.remoteAddress;
 
     return this.escrowService.expire(id, dto, userId, ipAddress);
@@ -129,7 +129,7 @@ export class EscrowController {
     @Query() query: ListEventsDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    const userId = req.user.sub;
+    const userId = req.user.userId;
     return this.escrowService.findEvents(userId, query, id);
   }
 
@@ -144,7 +144,7 @@ export class EscrowController {
     return this.escrowService.fund(
       id,
       dto,
-      req.user.sub,
+      req.user.userId,
       req.user.walletAddress,
       ipAddress,
     );
@@ -158,7 +158,7 @@ export class EscrowController {
   ) {
     const escrow = await this.escrowService.releaseEscrow(
       id,
-      req.user.sub,
+      req.user.userId,
       true, // manual trigger
     );
 
@@ -177,7 +177,7 @@ export class EscrowController {
     @Body() dto: FulfillConditionDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    const userId = req.user.sub;
+    const userId = req.user.userId;
     const ipAddress = req.ip || req.socket?.remoteAddress;
     return this.escrowService.fulfillCondition(
       escrowId,
@@ -195,7 +195,7 @@ export class EscrowController {
     @Param('conditionId') conditionId: string,
     @Request() req: AuthenticatedRequest,
   ) {
-    const userId = req.user.sub;
+    const userId = req.user.userId;
     const ipAddress = req.ip || req.socket?.remoteAddress;
     return this.escrowService.confirmCondition(
       escrowId,
@@ -218,7 +218,7 @@ export class EscrowController {
       escrowId,
       conditionId,
       dto,
-      req.user.sub,
+      req.user.userId,
     );
   }
 
@@ -233,7 +233,7 @@ export class EscrowController {
     return this.escrowService.acceptMilestoneChange(
       escrowId,
       conditionId,
-      req.user.sub,
+      req.user.userId,
     );
   }
 
@@ -250,7 +250,7 @@ export class EscrowController {
     @Request() req: AuthenticatedRequest,
   ) {
     const ipAddress = req.ip || req.socket?.remoteAddress;
-    return this.escrowService.fileDispute(id, req.user.sub, dto, ipAddress);
+    return this.escrowService.fileDispute(id, req.user.userId, dto, ipAddress);
   }
 
   /**
@@ -276,6 +276,11 @@ export class EscrowController {
     @Request() req: AuthenticatedRequest,
   ) {
     const ipAddress = req.ip || req.socket?.remoteAddress;
-    return this.escrowService.resolveDispute(id, req.user.sub, dto, ipAddress);
+    return this.escrowService.resolveDispute(
+      id,
+      req.user.userId,
+      dto,
+      ipAddress,
+    );
   }
 }

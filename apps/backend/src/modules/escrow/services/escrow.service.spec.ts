@@ -1059,7 +1059,12 @@ describe('EscrowService', () => {
       } as Escrow);
 
       await expect(
-        service.proposeMilestoneChange('escrow-123', 'condition-123', { amount: 150 }, 'buyer-id')
+        service.proposeMilestoneChange(
+          'escrow-123',
+          'condition-123',
+          { amount: 150 },
+          'buyer-id',
+        ),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -1075,7 +1080,7 @@ describe('EscrowService', () => {
         proposedDescription: 'new desc',
         proposedByUserId: 'buyer-id',
       };
-      
+
       escrowRepository.findOne.mockResolvedValue({
         ...activeEscrow,
         conditions: [conditionWithProposal],
@@ -1103,14 +1108,18 @@ describe('EscrowService', () => {
         isMet: false,
         proposedByUserId: 'buyer-id',
       };
-      
+
       escrowRepository.findOne.mockResolvedValue({
         ...activeEscrow,
         conditions: [conditionWithProposal],
       } as Escrow);
 
       await expect(
-        service.acceptMilestoneChange('escrow-123', 'condition-123', 'buyer-id')
+        service.acceptMilestoneChange(
+          'escrow-123',
+          'condition-123',
+          'buyer-id',
+        ),
       ).rejects.toThrow(ForbiddenException);
     });
   });
