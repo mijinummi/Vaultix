@@ -25,11 +25,7 @@ export default [
     },
 
     rules: {
-      "prettier/prettier": "error",
-
-      // Example custom rules
-      "@typescript-eslint/no-unused-vars": "warn",
-      "@typescript-eslint/no-explicit-any": "off",
+      // custom rules
     },
   },
 ];
