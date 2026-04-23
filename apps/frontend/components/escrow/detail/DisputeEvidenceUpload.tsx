@@ -17,7 +17,7 @@ export interface UploadedFile {
 
 interface DisputeEvidenceUploadProps {
   files: UploadedFile[];
-  onChange: (files: UploadedFile[]) => void;
+  onChange: React.Dispatch<React.SetStateAction<UploadedFile[]>>;
 }
 
 function FileIcon({ type }: { type: string }) {
