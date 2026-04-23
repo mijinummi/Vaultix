@@ -36,6 +36,8 @@ export default function CreateEscrowWizard() {
     mode: 'onChange',
     defaultValues: {
       asset: 'XLM',
+      milestones: [],
+      conditions: [],
     }
   });
 

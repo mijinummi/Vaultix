@@ -43,17 +43,17 @@ export const milestoneItemSchema = z.object({
 });
 
 export const milestonesSchema = z.object({
-  milestones: z.array(milestoneItemSchema).optional().default([]),
+  milestones: z.array(milestoneItemSchema).default([]),
 });
 
 export const conditionItemSchema = z.object({
   type: z.enum(['manual', 'time', 'oracle']),
-  description: z.string().optional().default(''),
-  releaseDate: z.string().optional().default(''),
+  description: z.string().default(''),
+  releaseDate: z.string().default(''),
 });
 
 export const conditionsSchema = z.object({
-  conditions: z.array(conditionItemSchema).optional().default([]),
+  conditions: z.array(conditionItemSchema).default([]),
 });
 
 // Combined schema for the full form state
