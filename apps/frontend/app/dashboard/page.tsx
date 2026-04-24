@@ -1,18 +1,83 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import StatusTabs from '@/component/dashboard/StatusTabs';
-import EscrowList from '@/component/dashboard/EscrowList';
-import EscrowFilters from '@/component/dashboard/EscrowFilters';
-import { useEscrows } from '../../hooks/useEscrows';
-import { IEscrow } from '@/types/escrow';
-import ActivityFeed from '@/components/common/ActivityFeed';
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useCallback } from "react";
+import StatusTabs from "@/component/dashboard/StatusTabs";
+import EscrowList from "@/component/dashboard/EscrowList";
+import EscrowFilters from "@/component/dashboard/EscrowFilters";
+import { useEscrows } from "../../hooks/useEscrows";
+import ActivityFeed from "@/components/common/ActivityFeed";
 
 export default function DashboardPage() {
-  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'pending' | 'completed' | 'disputed'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'deadline'>('date');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const activeStatuses =
+    searchParams.get("status")?.split(",").filter(Boolean) || [];
+  const searchQuery = searchParams.get("search") || "";
+  const sortBy =
+    (searchParams.get("sort") as "date" | "amount" | "deadline") || "date";
+  const sortOrder = (searchParams.get("order") as "asc" | "desc") || "desc";
+
+  const minAmount = searchParams.get("minAmount") || "";
+  const maxAmount = searchParams.get("maxAmount") || "";
+  const fromDate = searchParams.get("fromDate") || "";
+  const toDate = searchParams.get("toDate") || "";
+
+  const createQueryString = useCallback(
+    (paramsToUpdate: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams.toString());
+      Object.entries(paramsToUpdate).forEach(([key, value]) => {
+        if (value === null || value === "") {
+          params.delete(key);
+        } else {
+          params.set(key, value);
+        }
+      });
+      return params.toString();
+    },
+    [searchParams],
+  );
+
+  const handleToggleStatus = (status: string) => {
+    let nextStatuses: string[];
+    if (status === "all") {
+      nextStatuses = [];
+    } else {
+      nextStatuses = activeStatuses.includes(status)
+        ? activeStatuses.filter((s) => s !== status)
+        : [...activeStatuses, status];
+    }
+    router.push(
+      `${pathname}?${createQueryString({ status: nextStatuses.length ? nextStatuses.join(",") : null })}`,
+    );
+  };
+
+  const handleSearch = (query: string) => {
+    router.push(`${pathname}?${createQueryString({ search: query })}`);
+  };
+
+  const handleSortChange = (
+    field: "date" | "amount" | "deadline",
+    order: "asc" | "desc",
+  ) => {
+    router.push(
+      `${pathname}?${createQueryString({ sort: field, order: order })}`,
+    );
+  };
+
+  const handleAmountChange = (min: string, max: string) => {
+    router.push(
+      `${pathname}?${createQueryString({ minAmount: min, maxAmount: max })}`,
+    );
+  };
+
+  const handleDateChange = (from: string, to: string) => {
+    router.push(
+      `${pathname}?${createQueryString({ fromDate: from, toDate: to })}`,
+    );
+  };
 
   const {
     data: escrowsData,
@@ -20,32 +85,20 @@ export default function DashboardPage() {
     isError,
     hasNextPage,
     fetchNextPage,
-    isFetchingNextPage
+    isFetchingNextPage,
   } = useEscrows({
-    status: activeTab,
+    status: activeStatuses.join(","),
     search: searchQuery,
     sortBy,
-    sortOrder
+    sortOrder,
+    minAmount,
+    maxAmount,
+    fromDate,
+    toDate,
   });
 
-  // Flatten the paginated data
-  const flatEscrows = escrowsData?.pages.flatMap((page: any) => page.escrows) || [];
-
-  // Handle tab changes
-  const handleTabChange = (tab: 'all' | 'active' | 'pending' | 'completed' | 'disputed') => {
-    setActiveTab(tab);
-  };
-
-  // Handle search
-  const handleSearchChange = (query: string) => {
-    setSearchQuery(query);
-  };
-
-  // Handle sort change
-  const handleSortChange = (field: 'date' | 'amount' | 'deadline', order: 'asc' | 'desc') => {
-    setSortBy(field);
-    setSortOrder(order);
-  };
+  const flatEscrows =
+    escrowsData?.pages.flatMap((page: any) => page.escrows) || [];
 
   return (
     <div className="min-h-screen bg-gray-50 py-12">
@@ -61,21 +114,47 @@ export default function DashboardPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 bg-white rounded-lg shadow-md p-6 h-fit">
-            <StatusTabs activeTab={activeTab} onTabChange={handleTabChange} />
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Your Escrows</h2>
+              {(activeStatuses.length > 0 ||
+                searchQuery ||
+                minAmount ||
+                maxAmount ||
+                fromDate ||
+                toDate) && (
+                <button
+                  onClick={() => router.push(pathname)}
+                  className="cursor-pointer text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                >
+                  ✕ Clear all filters
+                </button>
+              )}
+            </div>
+
+            <StatusTabs
+              activeStatuses={activeStatuses}
+              onToggleStatus={handleToggleStatus}
+            />
 
             <EscrowFilters
               searchQuery={searchQuery}
-              onSearchChange={handleSearchChange}
+              onSearchChange={handleSearch}
               sortBy={sortBy}
               sortOrder={sortOrder}
               onSortChange={handleSortChange}
+              minAmount={minAmount}
+              maxAmount={maxAmount}
+              onAmountChange={handleAmountChange}
+              fromDate={fromDate}
+              toDate={toDate}
+              onDateChange={handleDateChange}
             />
 
             <EscrowList
               escrows={flatEscrows}
               isLoading={isLoading}
               isError={isError}
-              activeTab={activeTab}
+              activeTab={(activeStatuses[0] || "all") as any}
               hasNextPage={hasNextPage}
               fetchNextPage={fetchNextPage}
               isFetchingNextPage={isFetchingNextPage}
