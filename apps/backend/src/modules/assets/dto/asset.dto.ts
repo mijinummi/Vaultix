@@ -1,4 +1,13 @@
-import { IsString, IsNotEmpty, IsOptional, IsInt, Min, Max, IsBoolean, Length } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsInt,
+  Min,
+  Max,
+  IsBoolean,
+  Length,
+} from 'class-validator';
 
 export class CreateAssetDto {
   @IsString()

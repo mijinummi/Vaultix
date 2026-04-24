@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+} from '@nestjs/common';
 import { AssetsService } from './assets.service';
 import { CreateAssetDto, UpdateAssetDto } from './dto/asset.dto';
 import { AuthGuard } from '../auth/middleware/auth.guard';

@@ -1,7 +1,18 @@
-import { Injectable, Logger, Inject, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  Inject,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import axios from 'axios';
 import ipfsConfig from '../../config/ipfs.config';
+
+interface PinataResponse {
+  IpfsHash: string;
+  PinSize: number;
+  Timestamp: string;
+}
 
 @Injectable()
 export class IpfsService {
@@ -26,11 +37,15 @@ export class IpfsService {
       const blob = new Blob([fileBuffer]);
       formData.append('file', blob, filename);
 
-      const response = await axios.post('https://api.pinata.cloud/pinning/pinFileToIPFS', formData, {
-        headers: {
-          'Authorization': `Bearer ${this.config.pinataJwt}`,
+      const response = await axios.post<PinataResponse>(
+        'https://api.pinata.cloud/pinning/pinFileToIPFS',
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${this.config.pinataJwt}`,
+          },
         },
-      });
+      );
 
       const cid = response.data.IpfsHash;
       this.logger.log(`File uploaded successfully to IPFS. CID: ${cid}`);
@@ -47,20 +62,27 @@ export class IpfsService {
    * @param name The name for the pin
    * @returns The IPFS CID
    */
-  async uploadJson(data: any, name: string): Promise<string> {
+  async uploadJson(
+    data: Record<string, unknown>,
+    name: string,
+  ): Promise<string> {
     try {
       this.logger.log(`Uploading JSON to IPFS: ${name}`);
 
-      const response = await axios.post('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
-        pinataContent: data,
-        pinataMetadata: {
-          name,
+      const response = await axios.post<PinataResponse>(
+        'https://api.pinata.cloud/pinning/pinJSONToIPFS',
+        {
+          pinataContent: data,
+          pinataMetadata: {
+            name,
+          },
         },
-      }, {
-        headers: {
-          'Authorization': `Bearer ${this.config.pinataJwt}`,
+        {
+          headers: {
+            Authorization: `Bearer ${this.config.pinataJwt}`,
+          },
         },
-      });
+      );
 
       const cid = response.data.IpfsHash;
       this.logger.log(`JSON uploaded successfully to IPFS. CID: ${cid}`);

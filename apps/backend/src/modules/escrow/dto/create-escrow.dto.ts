@@ -22,7 +22,7 @@ export class EscrowAssetDto {
   @IsNotEmpty()
   code: string;
 
-  @ValidateIf(o => o.code !== 'XLM')
+  @ValidateIf((o: EscrowAssetDto) => o.code !== 'XLM')
   @IsString()
   @IsNotEmpty()
   issuer: string;

@@ -81,9 +81,11 @@ export class EscrowService {
       creatorId,
       expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
       metadataHash: dto.metadataHash,
-    } as any);
+    } as Partial<Escrow>);
 
-    const savedEscrow = (await this.escrowRepository.save(escrow)) as unknown as Escrow;
+    const savedEscrow = (await this.escrowRepository.save(
+      escrow,
+    )) as unknown as Escrow;
 
     const parties = dto.parties.map((partyDto) =>
       this.partyRepository.create({
@@ -487,7 +489,6 @@ export class EscrowService {
         walletAddress,
         String(dto.amount),
         escrow.assetCode ?? 'XLM',
-        escrow.assetIssuer,
       );
 
     const fundedAt = new Date();
@@ -1240,7 +1241,7 @@ export class EscrowService {
   async uploadEvidence(
     escrowId: string,
     userId: string,
-    file: any,
+    file: { buffer: Buffer; originalname: string },
   ): Promise<{ cid: string; url: string }> {
     const escrow = await this.findOne(escrowId);
 
@@ -1257,7 +1258,10 @@ export class EscrowService {
     }
 
     // Upload to IPFS
-    const cid = await this.ipfsService.uploadFile(file.buffer, file.originalname);
+    const cid = await this.ipfsService.uploadFile(
+      file.buffer,
+      file.originalname,
+    );
 
     // Update dispute evidence list
     const evidence = dispute.evidence || [];

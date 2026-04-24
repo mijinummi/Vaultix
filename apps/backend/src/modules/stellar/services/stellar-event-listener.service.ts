@@ -426,7 +426,7 @@ export class StellarEventListenerService
 
   private async handleEscrowCreated(event: StellarEvent) {
     // Check if escrow already exists
-    let escrow = await this.escrowRepository.findOne({
+    const escrow = await this.escrowRepository.findOne({
       where: { id: event.escrowId },
     });
 

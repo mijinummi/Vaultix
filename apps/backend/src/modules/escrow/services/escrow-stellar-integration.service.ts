@@ -81,7 +81,12 @@ export class EscrowStellarIntegrationService {
           escrowId,
           depositor.user.walletAddress, // User's Stellar wallet address
           recipient.user.walletAddress, // User's Stellar wallet address
-          escrow.assetCode === 'XLM' ? 'native' : new StellarSdk.Asset(escrow.assetCode, escrow.assetIssuer).contractId(this.config.networkPassphrase),
+          escrow.assetCode === 'XLM'
+            ? 'native'
+            : new StellarSdk.Asset(
+                escrow.assetCode,
+                escrow.assetIssuer,
+              ).contractId(this.config.networkPassphrase),
           milestones,
           escrow.expiresAt
             ? Math.floor(new Date(escrow.expiresAt).getTime() / 1000)
@@ -123,7 +128,6 @@ export class EscrowStellarIntegrationService {
     funderPublicKey: string,
     amount: string,
     assetCode: string = 'XLM',
-    assetIssuer?: string,
   ): Promise<string> {
     try {
       this.logger.log(

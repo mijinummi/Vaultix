@@ -315,10 +315,13 @@ export class EscrowController {
       new ParseFilePipe({
         validators: [
           new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }), // 10MB
-          new FileTypeValidator({ fileType: /(jpg|jpeg|png|pdf|txt|doc|docx)$/ }),
+          new FileTypeValidator({
+            fileType: /(jpg|jpeg|png|pdf|txt|doc|docx)$/,
+          }),
         ],
       }),
-    ) file: any,
+    )
+    file: { buffer: Buffer; originalname: string },
   ) {
     const userId = this.getAuthenticatedUserId(req);
     return this.escrowService.uploadEvidence(id, userId, file);
