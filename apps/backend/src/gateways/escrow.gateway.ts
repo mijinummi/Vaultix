@@ -35,8 +35,8 @@ export class EscrowGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       // Extract token from handshake
       const token =
-        client.handshake.auth.token ||
-        client.handshake.headers.authorization?.split(' ')[1];
+        (client.handshake.auth.token as string) ||
+        (client.handshake.headers.authorization as string)?.split(' ')[1];
 
       if (!token) {
         this.logger.warn(`Connection rejected: No token provided (${client.id})`);
@@ -49,7 +49,7 @@ export class EscrowGateway implements OnGatewayConnection, OnGatewayDisconnect {
         sub?: string;
         userId?: string;
       };
-      const userId = decoded.sub || decoded.userId;
+      const userId: string | undefined = decoded.sub || decoded.userId;
 
       if (!userId) {
         this.logger.warn(`Connection rejected: Invalid token (${client.id})`);
@@ -59,7 +59,7 @@ export class EscrowGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       // Store connection mapping
       this.socketUserMap.set(client.id, userId);
-      const userSockets = this.userSocketMap.get(userId) || [];
+      const userSockets: string[] = this.userSocketMap.get(userId) || [];
       userSockets.push(client.id);
       this.userSocketMap.set(userId, userSockets);
 
@@ -67,7 +67,7 @@ export class EscrowGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       // Send connection success
       client.emit('connected', { userId, socketId: client.id });
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(`Connection rejected: Invalid token (${client.id})`, error);
       client.disconnect();
     }
@@ -100,10 +100,10 @@ export class EscrowGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('joinEscrow')
   handleJoinEscrow(client: Socket, escrowId: string): void {
     const room = `escrow:${escrowId}`;
-    client.join(room);
+    void client.join(room);
 
     // Track subscription
-    const escrowIds = this.socketEscrowMap.get(client.id) || [];
+    const escrowIds: string[] = this.socketEscrowMap.get(client.id) || [];
     if (!escrowIds.includes(escrowId)) {
       escrowIds.push(escrowId);
       this.socketEscrowMap.set(client.id, escrowIds);
@@ -116,10 +116,10 @@ export class EscrowGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('leaveEscrow')
   handleLeaveEscrow(client: Socket, escrowId: string): void {
     const room = `escrow:${escrowId}`;
-    client.leave(room);
+    void client.leave(room);
 
     // Remove from tracking
-    const escrowIds = this.socketEscrowMap.get(client.id) || [];
+    const escrowIds: string[] = this.socketEscrowMap.get(client.id) || [];
     const updatedEscrowIds = escrowIds.filter((id) => id !== escrowId);
     this.socketEscrowMap.set(client.id, updatedEscrowIds);
 
