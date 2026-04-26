@@ -42,6 +42,7 @@ import { WebhookService } from '../../../services/webhook/webhook.service';
 import { User, UserRole } from '../../user/entities/user.entity';
 import { IpfsService } from '../../ipfs/ipfs.service';
 import { AllowedAsset } from '../../assets/entities/allowed-asset.entity';
+import { normalizeMetadataHash } from '../utils/metadata-hash.util';
 
 @Injectable()
 export class EscrowService {
@@ -71,6 +72,17 @@ export class EscrowService {
     creatorId: string,
     ipAddress?: string,
   ): Promise<Escrow> {
+    let metadataHash: string | undefined;
+    if (dto.metadataHash) {
+      try {
+        metadataHash = normalizeMetadataHash(dto.metadataHash);
+      } catch (error) {
+        throw new BadRequestException(
+          `Invalid metadataHash: ${this.getErrorMessage(error)}`,
+        );
+      }
+    }
+
     const escrow = this.escrowRepository.create({
       title: dto.title,
       description: dto.description,
@@ -80,7 +92,7 @@ export class EscrowService {
       type: dto.type,
       creatorId,
       expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
-      metadataHash: dto.metadataHash,
+      metadataHash,
     } as Partial<Escrow>);
 
     const savedEscrow = (await this.escrowRepository.save(

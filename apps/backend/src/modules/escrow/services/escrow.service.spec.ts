@@ -223,6 +223,46 @@ describe('EscrowService', () => {
       expect(result).toBeDefined();
       expect(conditionRepository.save.mock.calls.length).toBeGreaterThan(0);
     });
+
+    it('should normalize metadataHash before persisting', async () => {
+      const createDto: CreateEscrowDto = {
+        title: 'Test Escrow',
+        amount: 100,
+        parties: [{ userId: 'user-456', role: PartyRole.SELLER }],
+        metadataHash:
+          '0102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F20',
+      };
+
+      escrowRepository.create.mockReturnValue(mockEscrow as Escrow);
+      escrowRepository.save.mockResolvedValue(mockEscrow as Escrow);
+      escrowRepository.findOne.mockResolvedValue(mockEscrow as Escrow);
+      partyRepository.create.mockReturnValue(mockParty as Party);
+      partyRepository.save.mockResolvedValue(mockParty as Party);
+      eventRepository.create.mockReturnValue({} as EscrowEvent);
+      eventRepository.save.mockResolvedValue({} as EscrowEvent);
+
+      await service.create(createDto, 'user-123');
+
+      expect(escrowRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadataHash:
+            '0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20',
+        }),
+      );
+    });
+
+    it('should reject malformed metadataHash values', async () => {
+      const createDto: CreateEscrowDto = {
+        title: 'Test Escrow',
+        amount: 100,
+        parties: [{ userId: 'user-456', role: PartyRole.SELLER }],
+        metadataHash: 'not-a-cid',
+      };
+
+      await expect(service.create(createDto, 'user-123')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
   });
 
   describe('findOne', () => {
