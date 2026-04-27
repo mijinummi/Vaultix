@@ -342,6 +342,7 @@ pub enum Error {
     Unauthorized = 27,
     OperatorNotInitialized = 28,
     ArbitratorNotInitialized = 29,
+    InvalidMetadataHash = 30,
 }
 
 const DEFAULT_FEE_BPS: i128 = 50;
@@ -711,6 +712,8 @@ impl VaultixEscrow {
             return Err(Error::SelfDealing);
         }
 
+        validate_metadata_hash(&metadata_hash)?;
+
         if env
             .storage()
             .persistent()
@@ -802,6 +805,8 @@ impl VaultixEscrow {
             if depositor == recipient {
                 return Err(Error::SelfDealing);
             }
+
+            validate_metadata_hash(&metadata_hash)?;
 
             for existing_id in escrow_ids.iter() {
                 if existing_id == escrow_id {
@@ -1702,6 +1707,14 @@ fn validate_milestones(milestones: &Vec<Milestone>) -> Result<i128, Error> {
             .ok_or(Error::InvalidMilestoneAmount)?;
     }
     Ok(total)
+}
+
+fn validate_metadata_hash(metadata_hash: &BytesN<32>) -> Result<(), Error> {
+    if metadata_hash.to_array() == [0u8; 32] {
+        return Err(Error::InvalidMetadataHash);
+    }
+
+    Ok(())
 }
 
 fn verify_all_released(milestones: &Vec<Milestone>) -> bool {
