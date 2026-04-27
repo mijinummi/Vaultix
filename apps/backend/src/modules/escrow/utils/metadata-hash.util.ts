@@ -24,6 +24,9 @@ export function normalizeMetadataHash(reference: string): string {
 }
 
 function sanitizeReference(reference: string): string {
+  if (!reference) {
+    throw new Error('metadata hash is required');
+  }
   const value = reference.trim();
   if (!value) {
     throw new Error('metadata hash is required');
