@@ -1,8 +1,10 @@
 // test.rs
+extern crate std;
+
 use super::*;
 use soroban_sdk::{
-    testutils::{Address as _, Events, Ledger},
-    token, vec, Address, Env, IntoVal,
+    testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation, Events, Ledger},
+    token, vec, Address, Env, IntoVal, Val,
 };
 
 /// Helper function to create and initialize a test token
@@ -25,6 +27,217 @@ fn create_token_contract<'a>(
 
 fn valid_metadata_hash(env: &Env) -> BytesN<32> {
     BytesN::from_array(env, &[7u8; 32])
+}
+
+fn assert_role_updated_event(
+    env: &Env,
+    contract_id: &Address,
+    event: &(Address, soroban_sdk::Vec<Val>, Val),
+    role: Role,
+    had_old_address: bool,
+    old_address: &Address,
+    new_address: &Address,
+) {
+    assert_eq!(&event.0, contract_id);
+
+    let expected_topics: soroban_sdk::Vec<Val> = (
+        Symbol::new(env, "Vaultix"),
+        Symbol::new(env, "v1"),
+        Symbol::new(env, "RoleUpdated"),
+    )
+        .into_val(env);
+    assert_eq!(event.1, expected_topics);
+
+    let payload: RoleUpdatedEvent = event.2.clone().into_val(env);
+    assert_eq!(
+        payload,
+        RoleUpdatedEvent {
+            role,
+            had_old_address,
+            old_address: old_address.clone(),
+            new_address: new_address.clone(),
+            timestamp: 0,
+        }
+    );
+}
+
+#[test]
+fn test_initialize_fails_when_treasury_already_initialized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, VaultixEscrow);
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let treasury = Address::generate(&env);
+    let replacement_treasury = Address::generate(&env);
+
+    client.initialize(&treasury, &Some(50));
+
+    let result = client.try_initialize(&replacement_treasury, &Some(75));
+    assert_eq!(result, Err(Ok(Error::AlreadyInitialized)));
+
+    assert_eq!(client.get_treasury(), treasury);
+    assert_eq!(client.get_config(), (treasury, 50));
+}
+
+#[test]
+fn test_role_rotation_requires_current_admin_auth() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, VaultixEscrow);
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let treasury = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let operator = Address::generate(&env);
+    let arbitrator = Address::generate(&env);
+
+    client.initialize(&treasury, &Some(50));
+    client.init(&admin, &operator, &arbitrator);
+
+    let replacement_admin = Address::generate(&env);
+    client.set_admin(&replacement_admin);
+    assert_eq!(
+        env.auths(),
+        std::vec![(
+            admin.clone(),
+            AuthorizedInvocation {
+                function: AuthorizedFunction::Contract((
+                    contract_id.clone(),
+                    Symbol::new(&env, "set_admin"),
+                    (&replacement_admin,).into_val(&env),
+                )),
+                sub_invocations: std::vec![],
+            },
+        )]
+    );
+
+    let replacement_operator = Address::generate(&env);
+    client.set_operator(&replacement_operator);
+    assert_eq!(
+        env.auths(),
+        std::vec![(
+            replacement_admin.clone(),
+            AuthorizedInvocation {
+                function: AuthorizedFunction::Contract((
+                    contract_id.clone(),
+                    Symbol::new(&env, "set_operator"),
+                    (&replacement_operator,).into_val(&env),
+                )),
+                sub_invocations: std::vec![],
+            },
+        )]
+    );
+
+    let replacement_arbitrator = Address::generate(&env);
+    client.set_arbitrator(&replacement_arbitrator);
+    assert_eq!(
+        env.auths(),
+        std::vec![(
+            replacement_admin.clone(),
+            AuthorizedInvocation {
+                function: AuthorizedFunction::Contract((
+                    contract_id.clone(),
+                    Symbol::new(&env, "set_arbitrator"),
+                    (&replacement_arbitrator,).into_val(&env),
+                )),
+                sub_invocations: std::vec![],
+            },
+        )]
+    );
+
+    let replacement_treasury = Address::generate(&env);
+    client.set_treasury(&replacement_treasury);
+    assert_eq!(
+        env.auths(),
+        std::vec![(
+            replacement_admin,
+            AuthorizedInvocation {
+                function: AuthorizedFunction::Contract((
+                    contract_id,
+                    Symbol::new(&env, "set_treasury"),
+                    (&replacement_treasury,).into_val(&env),
+                )),
+                sub_invocations: std::vec![],
+            },
+        )]
+    );
+}
+
+#[test]
+fn test_role_rotation_updates_roles_and_emits_audit_events() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, VaultixEscrow);
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let treasury = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let operator = Address::generate(&env);
+    let arbitrator = Address::generate(&env);
+
+    client.initialize(&treasury, &Some(50));
+    client.init(&admin, &operator, &arbitrator);
+
+    let replacement_admin = Address::generate(&env);
+    let replacement_operator = Address::generate(&env);
+    let replacement_arbitrator = Address::generate(&env);
+    let replacement_treasury = Address::generate(&env);
+
+    let events_before = env.events().all().len();
+
+    client.set_admin(&replacement_admin);
+    client.set_operator(&replacement_operator);
+    client.set_arbitrator(&replacement_arbitrator);
+    client.set_treasury(&replacement_treasury);
+
+    assert_eq!(client.get_admin(), replacement_admin);
+    assert_eq!(client.get_operator(), replacement_operator);
+    assert_eq!(client.get_arbitrator(), replacement_arbitrator);
+    assert_eq!(client.get_treasury(), replacement_treasury);
+
+    let events = env.events().all();
+    assert_eq!(events.len(), events_before + 4);
+
+    assert_role_updated_event(
+        &env,
+        &contract_id,
+        &events.get(events_before).unwrap(),
+        Role::Admin,
+        true,
+        &admin,
+        &replacement_admin,
+    );
+    assert_role_updated_event(
+        &env,
+        &contract_id,
+        &events.get(events_before + 1).unwrap(),
+        Role::Operator,
+        true,
+        &operator,
+        &replacement_operator,
+    );
+    assert_role_updated_event(
+        &env,
+        &contract_id,
+        &events.get(events_before + 2).unwrap(),
+        Role::Arbitrator,
+        true,
+        &arbitrator,
+        &replacement_arbitrator,
+    );
+    assert_role_updated_event(
+        &env,
+        &contract_id,
+        &events.get(events_before + 3).unwrap(),
+        Role::Treasury,
+        true,
+        &treasury,
+        &replacement_treasury,
+    );
 }
 
 #[test]
