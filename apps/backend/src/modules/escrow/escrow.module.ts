@@ -26,13 +26,35 @@ import { EscrowStellarIntegrationService } from './services/escrow-stellar-integ
 
 import { AuthModule } from '../auth/auth.module';
 import { StellarModule } from '../stellar/stellar.module';
+import { Dispute } from './entities/dispute.entity';
+import { EscrowService } from './services/escrow.service';
+import { EscrowSchedulerService } from './services/escrow-scheduler.service';
+import { EscrowController } from './controllers/escrow.controller';
+import { EscrowSchedulerController } from './controllers/escrow-scheduler.controller';
+import { EventsController } from './controllers/events.controller';
+import { EscrowAccessGuard } from './guards/escrow-access.guard';
+import { EscrowExpireGuard } from './guards/escrow-expire.guard';
+import { AuthModule } from '../auth/auth.module';
+import { EscrowStellarIntegrationService } from './services/escrow-stellar-integration.service';
+import { WebhookModule } from '../webhook/webhook.module';
+import { IpfsModule } from '../ipfs/ipfs.module';
+import { User } from '../user/entities/user.entity';
+import { AllowedAsset } from '../assets/entities/allowed-asset.entity';
 
 @Module({
   imports: [
-    ScheduleModule.forRoot(),
-    TypeOrmModule.forFeature([Escrow, Party, Condition, EscrowEvent]),
+    TypeOrmModule.forFeature([
+      Escrow,
+      Party,
+      Condition,
+      EscrowEvent,
+      Dispute,
+      User,
+      AllowedAsset,
+    ]),
     AuthModule,
-    StellarModule,
+    WebhookModule,
+    IpfsModule,
   ],
 
   controllers: [
@@ -40,6 +62,7 @@ import { StellarModule } from '../stellar/stellar.module';
     EscrowSchedulerController,
   ],
 
+  controllers: [EscrowController, EscrowSchedulerController, EventsController],
   providers: [
     // ✅ Core domain services (decomposed)
     EscrowLifecycleService,
@@ -56,6 +79,7 @@ import { StellarModule } from '../stellar/stellar.module';
 
     // ✅ Guards
     EscrowAccessGuard,
+    EscrowExpireGuard,
   ],
 
   exports: [

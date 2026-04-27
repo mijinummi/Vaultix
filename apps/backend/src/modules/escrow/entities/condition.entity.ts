@@ -39,6 +39,21 @@ export class Condition {
   type: ConditionType;
 
   @Column({ default: false })
+  isFulfilled: boolean;
+
+  @Column({ type: 'datetime', nullable: true })
+  fulfilledAt?: Date;
+
+  @Column({ nullable: true })
+  fulfilledByUserId?: string;
+
+  @Column({ type: 'text', nullable: true })
+  fulfillmentNotes?: string;
+
+  @Column({ type: 'text', nullable: true })
+  fulfillmentEvidence?: string;
+
+  @Column({ default: false })
   isMet: boolean;
 
   @Column({ type: 'datetime', nullable: true })
@@ -49,6 +64,18 @@ export class Condition {
 
   @Column({ type: 'simple-json', nullable: true })
   metadata?: Record<string, any>;
+
+  @Column({ type: 'decimal', precision: 18, scale: 7, nullable: true })
+  amount?: number;
+
+  @Column({ type: 'decimal', precision: 18, scale: 7, nullable: true })
+  proposedAmount?: number;
+
+  @Column({ type: 'text', nullable: true })
+  proposedDescription?: string;
+
+  @Column({ nullable: true })
+  proposedByUserId?: string;
 
   @CreateDateColumn()
   createdAt: Date;
