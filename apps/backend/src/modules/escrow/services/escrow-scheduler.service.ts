@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan, In, IsNull } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Escrow, EscrowStatus } from '../entities/escrow.entity';
-import { EscrowEvent } from '../entities/escrow-event.entity';
+import { EscrowEvent, EscrowEventType } from '../entities/escrow-event.entity';
 import { EscrowService } from './escrow.service';
 
 @Injectable()
@@ -132,57 +132,38 @@ export class EscrowSchedulerService {
   }
 
   private async autoCancelEscrow(escrow: Escrow) {
-    this.logger.log(`Auto-canceling expired pending escrow: ${escrow.id}`);
+    this.logger.log(`Auto-expiring pending escrow: ${escrow.id}`);
 
-    escrow.status = EscrowStatus.CANCELLED;
-    escrow.isActive = false;
+    const expiredEscrow = await this.escrowService.expireBySystem(
+      escrow.id,
+      'EXPIRED_PENDING',
+    );
 
-    await this.escrowRepository.save(escrow);
-
-    await this.escrowEventRepository.save({
-      escrow: { id: escrow.id },
-      type: 'AUTO_CANCELLED',
-      data: {
-        reason: 'EXPIRED_PENDING',
-        expiredAt: escrow.expiresAt,
-        processedAt: new Date(),
-      },
-    });
-
-    void this.notifyParties(escrow, 'ESCROW_AUTO_CANCELLED', {
+    void this.notifyParties(expiredEscrow, 'ESCROW_EXPIRED', {
       reason: 'Escrow expired while pending',
-      expiredAt: escrow.expiresAt,
+      expiredAt: expiredEscrow.expiresAt,
     });
 
-    this.logger.log(`Successfully auto-cancelled escrow: ${escrow.id}`);
+    this.logger.log(`Successfully expired pending escrow: ${escrow.id}`);
   }
 
   private async escalateToDispute(escrow: Escrow) {
     this.logger.log(
-      `Escalating expired active escrow to dispute: ${escrow.id}`,
+      `Escalating expired active escrow to expired status: ${escrow.id}`,
     );
 
-    escrow.status = EscrowStatus.DISPUTED;
+    const expiredEscrow = await this.escrowService.expireBySystem(
+      escrow.id,
+      'EXPIRED_ACTIVE',
+    );
 
-    await this.escrowRepository.save(escrow);
-
-    await this.escrowEventRepository.save({
-      escrow: { id: escrow.id },
-      type: 'AUTO_ESCALATED_TO_DISPUTE',
-      data: {
-        reason: 'EXPIRED_ACTIVE',
-        expiredAt: escrow.expiresAt,
-        processedAt: new Date(),
-      },
-    });
-
-    void this.notifyParties(escrow, 'ESCROW_ESCALATED_TO_DISPUTE', {
+    void this.notifyParties(expiredEscrow, 'ESCROW_EXPIRED', {
       reason: 'Escrow expired while active',
-      expiredAt: escrow.expiresAt,
+      expiredAt: expiredEscrow.expiresAt,
       requiresArbitration: true,
     });
 
-    this.logger.log(`Successfully escalated escrow to dispute: ${escrow.id}`);
+    this.logger.log(`Successfully expired active escrow: ${escrow.id}`);
   }
 
   private async sendExpirationWarning(escrow: Escrow) {
@@ -192,8 +173,8 @@ export class EscrowSchedulerService {
     await this.escrowRepository.save(escrow);
 
     await this.escrowEventRepository.save({
-      escrow: { id: escrow.id },
-      type: 'EXPIRATION_WARNING_SENT',
+      escrowId: escrow.id,
+      eventType: EscrowEventType.EXPIRATION_WARNING_SENT,
       data: {
         expiresAt: escrow.expiresAt,
         warnedAt: new Date(),
@@ -278,7 +259,7 @@ export class EscrowSchedulerService {
       await this.escalateToDispute(escrow);
     } else {
       this.logger.log(
-        `Escrow ${escrowId} already processed with status: ${escrow.status}`,
+        `Escrow ${escrowId} already in terminal state: ${escrow.status}`,
       );
     }
   }

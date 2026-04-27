@@ -2,47 +2,47 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import type { Server } from 'http';
+import { DataSource, Repository } from 'typeorm';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import { AppModule } from '../src/app.module';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { User } from '../src/modules/user/entities/user.entity';
-import { RefreshToken } from '../src/modules/user/entities/refresh-token.entity';
-import { Escrow } from '../src/modules/escrow/entities/escrow.entity';
-import { Party, PartyRole } from '../src/modules/escrow/entities/party.entity';
-import { Condition } from '../src/modules/escrow/entities/condition.entity';
-import { EscrowEvent } from '../src/modules/escrow/entities/escrow-event.entity';
+import { Keypair } from 'stellar-sdk';
+import {
+  Escrow,
+  EscrowStatus,
+  EscrowType,
+} from '../src/modules/escrow/entities/escrow.entity';
+import { PartyRole } from '../src/modules/escrow/entities/party.entity';
 
-// Mock Stellar keypair for testing
-interface MockKeypair {
-  publicKey: () => string;
-  sign: (data: string) => Buffer;
-}
+// No mock needed, using real Keypair
 
-function createMockKeypair(): MockKeypair {
-  const randomKey =
-    'G' +
-    Array.from({ length: 55 }, () =>
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'.charAt(Math.floor(Math.random() * 32)),
-    ).join('');
-  return {
-    publicKey: () => randomKey,
-    sign: (data: string) => Buffer.from(data + '-signed'),
-  };
+function createMockKeypair(): Keypair {
+  return Keypair.random();
 }
 
 describe('Escrow (e2e)', () => {
   let app: INestApplication;
   let httpServer: Server;
-  let testKeypair: MockKeypair;
+  let testKeypair: Keypair;
   let testWalletAddress: string;
   let accessToken: string;
   let userId: string;
 
-  let secondKeypair: MockKeypair;
+  let secondKeypair: Keypair;
   let secondWalletAddress: string;
   let secondAccessToken: string;
   let secondUserId: string;
+  let escrowRepository: Repository<Escrow>;
+
+  let arbitratorKeypair: Keypair;
+  let arbitratorWalletAddress: string;
+  let arbitratorAccessToken: string;
+  let arbitratorUserId: string;
 
   beforeAll(async () => {
+    // Use an isolated in-memory SQLite database for every test run
+    process.env.DATABASE_PATH = ':memory:';
+    process.env.NODE_ENV = 'test';
+
     testKeypair = createMockKeypair();
     testWalletAddress = testKeypair.publicKey();
 
@@ -50,21 +50,14 @@ describe('Escrow (e2e)', () => {
     secondWalletAddress = secondKeypair.publicKey();
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [
-        AppModule,
-        TypeOrmModule.forRoot({
-          type: 'sqlite',
-          database: ':memory:',
-          entities: [User, RefreshToken, Escrow, Party, Condition, EscrowEvent],
-          synchronize: true,
-        }),
-      ],
+      imports: [AppModule],
     }).compile();
 
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ transform: true }));
     await app.init();
     httpServer = app.getHttpServer() as Server;
+    escrowRepository = app.get(DataSource).getRepository(Escrow);
 
     // Authenticate first user
     const challengeResponse = await request(httpServer)
@@ -72,15 +65,13 @@ describe('Escrow (e2e)', () => {
       .send({ walletAddress: testWalletAddress });
 
     const message = (challengeResponse.body as { message: string }).message;
-    const signature = testKeypair.sign(message).toString('hex');
+    const signature = testKeypair.sign(Buffer.from(message)).toString('hex');
 
-    const verifyResponse = await request(httpServer)
-      .post('/auth/verify')
-      .send({
-        walletAddress: testWalletAddress,
-        signature: signature,
-        publicKey: testWalletAddress,
-      });
+    const verifyResponse = await request(httpServer).post('/auth/verify').send({
+      walletAddress: testWalletAddress,
+      signature: signature,
+      publicKey: testWalletAddress,
+    });
 
     accessToken = (verifyResponse.body as { accessToken: string }).accessToken;
 
@@ -95,7 +86,9 @@ describe('Escrow (e2e)', () => {
       .send({ walletAddress: secondWalletAddress });
 
     const message2 = (challenge2.body as { message: string }).message;
-    const signature2 = secondKeypair.sign(message2).toString('hex');
+    const signature2 = secondKeypair
+      .sign(Buffer.from(message2))
+      .toString('hex');
 
     const verify2 = await request(httpServer).post('/auth/verify').send({
       walletAddress: secondWalletAddress,
@@ -109,10 +102,42 @@ describe('Escrow (e2e)', () => {
       .get('/auth/me')
       .set('Authorization', `Bearer ${secondAccessToken}`);
     secondUserId = (me2.body as { id: string }).id;
+
+    // Authenticate arbitrator user
+    arbitratorKeypair = createMockKeypair();
+    arbitratorWalletAddress = arbitratorKeypair.publicKey();
+
+    const challenge3 = await request(httpServer)
+      .post('/auth/challenge')
+      .send({ walletAddress: arbitratorWalletAddress });
+
+    const message3 = (challenge3.body as { message: string }).message;
+    const signature3 = arbitratorKeypair
+      .sign(Buffer.from(message3))
+      .toString('hex');
+
+    const verify3 = await request(httpServer).post('/auth/verify').send({
+      walletAddress: arbitratorWalletAddress,
+      signature: signature3,
+      publicKey: arbitratorWalletAddress,
+    });
+
+    arbitratorAccessToken = (verify3.body as { accessToken: string })
+      .accessToken;
+
+    const me3 = await request(httpServer)
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${arbitratorAccessToken}`);
+    arbitratorUserId = (me3.body as { id: string }).id;
+
+    // Grab the Escrow repository for direct DB manipulation in dispute tests
+    escrowRepository = app.get<Repository<Escrow>>(getRepositoryToken(Escrow));
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   interface EscrowResponse {
@@ -129,6 +154,28 @@ describe('Escrow (e2e)', () => {
     total: number;
     page: number;
     limit: number;
+  }
+
+  interface EscrowOverviewItem {
+    escrowId: string;
+    depositor: string;
+    recipient: string | null;
+    token: string;
+    totalAmount: number;
+    totalReleased: number;
+    remainingAmount: number;
+    status: string;
+    deadline: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }
+
+  interface EscrowOverviewResponse {
+    data: EscrowOverviewItem[];
+    totalItems: number;
+    totalPages: number;
+    page: number;
+    pageSize: number;
   }
 
   describe('POST /escrows', () => {
@@ -235,6 +282,152 @@ describe('Escrow (e2e)', () => {
 
     it('should return 401 without auth token', async () => {
       await request(httpServer).get('/escrows').expect(401);
+    });
+  });
+
+  describe('GET /escrows/overview', () => {
+    async function createOverviewEscrow(params: {
+      title: string;
+      amount?: number;
+      asset?: string;
+      expiresAt?: string;
+    }): Promise<string> {
+      const response = await request(httpServer)
+        .post('/escrows')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          title: params.title,
+          amount: params.amount ?? 100,
+          asset: params.asset ?? 'XLM',
+          type: EscrowType.STANDARD,
+          expiresAt: params.expiresAt,
+          parties: [{ userId: secondUserId, role: PartyRole.SELLER }],
+        })
+        .expect(201);
+
+      return (response.body as EscrowResponse).id;
+    }
+
+    it('should filter by role and status', async () => {
+      const pendingId = await createOverviewEscrow({
+        title: 'Overview Pending Escrow',
+      });
+      const completedId = await createOverviewEscrow({
+        title: 'Overview Completed Escrow',
+      });
+
+      await escrowRepository.update(completedId, {
+        status: EscrowStatus.COMPLETED,
+        isReleased: true,
+      });
+
+      const depositorCompletedResponse = await request(httpServer)
+        .get('/escrows/overview?role=depositor&status=completed')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      const depositorCompletedBody =
+        depositorCompletedResponse.body as EscrowOverviewResponse;
+      const completedEscrow = depositorCompletedBody.data.find(
+        (item) => item.escrowId === completedId,
+      );
+
+      expect(completedEscrow).toBeDefined();
+      expect(completedEscrow?.status).toBe('completed');
+      expect(completedEscrow?.depositor).toBe(userId);
+      expect(completedEscrow?.recipient).toBe(secondUserId);
+      expect(completedEscrow?.totalReleased).toBe(completedEscrow?.totalAmount);
+      expect(completedEscrow?.remainingAmount).toBe(0);
+      expect(
+        depositorCompletedBody.data.some((item) => item.escrowId === pendingId),
+      ).toBe(false);
+
+      const recipientPendingResponse = await request(httpServer)
+        .get('/escrows/overview?role=recipient&status=created')
+        .set('Authorization', `Bearer ${secondAccessToken}`)
+        .expect(200);
+
+      const recipientPendingBody =
+        recipientPendingResponse.body as EscrowOverviewResponse;
+      expect(
+        recipientPendingBody.data.some((item) => item.escrowId === pendingId),
+      ).toBe(true);
+      recipientPendingBody.data.forEach((item) => {
+        expect(item.status).toBe('pending');
+        expect(item.recipient).toBe(secondUserId);
+      });
+    });
+
+    it('should return accurate pagination metadata and handle out-of-range pages', async () => {
+      await createOverviewEscrow({ title: 'Overview Pagination 1' });
+      await createOverviewEscrow({ title: 'Overview Pagination 2' });
+      await createOverviewEscrow({ title: 'Overview Pagination 3' });
+
+      const pageOneResponse = await request(httpServer)
+        .get(
+          '/escrows/overview?page=1&pageSize=2&sortBy=createdAt&sortOrder=desc',
+        )
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      const pageOneBody = pageOneResponse.body as EscrowOverviewResponse;
+      expect(pageOneBody.page).toBe(1);
+      expect(pageOneBody.pageSize).toBe(2);
+      expect(pageOneBody.totalItems).toBeGreaterThanOrEqual(3);
+      expect(pageOneBody.totalPages).toBe(
+        Math.ceil(pageOneBody.totalItems / pageOneBody.pageSize),
+      );
+      expect(pageOneBody.data.length).toBeLessThanOrEqual(2);
+
+      const outOfRangeResponse = await request(httpServer)
+        .get('/escrows/overview?page=999&pageSize=2')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      const outOfRangeBody = outOfRangeResponse.body as EscrowOverviewResponse;
+      expect(outOfRangeBody.page).toBe(999);
+      expect(outOfRangeBody.pageSize).toBe(2);
+      expect(outOfRangeBody.data).toEqual([]);
+    });
+
+    it('should sort by created date and deadline', async () => {
+      const idOld = await createOverviewEscrow({
+        title: 'Overview Sort Old',
+        expiresAt: '2026-06-10T10:00:00.000Z',
+      });
+      const idNew = await createOverviewEscrow({
+        title: 'Overview Sort New',
+        expiresAt: '2026-06-01T10:00:00.000Z',
+      });
+
+      await escrowRepository.update(idOld, {
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      });
+      await escrowRepository.update(idNew, {
+        createdAt: new Date('2026-01-15T00:00:00.000Z'),
+      });
+
+      const createdSortResponse = await request(httpServer)
+        .get('/escrows/overview?sortBy=createdAt&sortOrder=asc&pageSize=50')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      const createdSortBody =
+        createdSortResponse.body as EscrowOverviewResponse;
+      const createdIds = createdSortBody.data.map((item) => item.escrowId);
+      expect(createdIds.indexOf(idOld)).toBeLessThan(createdIds.indexOf(idNew));
+
+      const deadlineSortResponse = await request(httpServer)
+        .get('/escrows/overview?sortBy=deadline&sortOrder=asc&pageSize=50')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      const deadlineSortBody =
+        deadlineSortResponse.body as EscrowOverviewResponse;
+      const deadlineIds = deadlineSortBody.data.map((item) => item.escrowId);
+      expect(deadlineIds.indexOf(idNew)).toBeLessThan(
+        deadlineIds.indexOf(idOld),
+      );
     });
   });
 
@@ -363,6 +556,415 @@ describe('Escrow (e2e)', () => {
         .post(`/escrows/${escrowId}/cancel`)
         .set('Authorization', `Bearer ${accessToken}`)
         .send({})
+        .expect(400);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Dispute management
+  // ---------------------------------------------------------------------------
+
+  interface DisputeResponse {
+    id: string;
+    escrowId: string;
+    reason: string;
+    status: string;
+    filedByUserId: string;
+    evidence: string[] | null;
+    outcome: string | null;
+    resolutionNotes: string | null;
+    sellerPercent: string | null;
+    buyerPercent: string | null;
+    resolvedByUserId: string | null;
+    resolvedAt: string | null;
+  }
+
+  /** Create an escrow with buyer + seller + arbitrator and force it to ACTIVE. */
+  const createActiveEscrow = async (): Promise<string> => {
+    const res = await request(httpServer)
+      .post('/escrows')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        title: 'Dispute Test Escrow',
+        description: 'Test description',
+        amount: 100,
+        asset: 'XLM',
+        parties: [
+          { userId: secondUserId, role: PartyRole.SELLER },
+          { userId: arbitratorUserId, role: PartyRole.ARBITRATOR },
+        ],
+      });
+    if (res.status !== 201) {
+      console.log('CREATE ESCROW FAILED:', res.body);
+    }
+    expect(res.status).toBe(201);
+    const id = (res.body as EscrowResponse).id;
+    await escrowRepository.update(id, { status: EscrowStatus.ACTIVE });
+    return id;
+  };
+
+  /** Create an ACTIVE escrow and immediately file a dispute on it (buyer). */
+  const createDisputedEscrow = async (): Promise<string> => {
+    const id = await createActiveEscrow();
+    await request(httpServer)
+      .post(`/escrows/${id}/dispute`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ reason: 'Pre-filed dispute for resolution tests' });
+    return id;
+  };
+
+  describe('POST /escrows/:id/dispute', () => {
+    let escrowId: string;
+
+    beforeEach(async () => {
+      escrowId = await createActiveEscrow();
+    });
+
+    it('should allow a buyer to file a dispute', async () => {
+      const res = await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ reason: 'Goods not delivered as described' })
+        .expect(201);
+
+      const body = res.body as DisputeResponse;
+      expect(body).toHaveProperty('id');
+      expect(body.escrowId).toBe(escrowId);
+      expect(body.reason).toBe('Goods not delivered as described');
+      expect(body.status).toBe('open');
+      expect(body.filedByUserId).toBe(userId);
+      expect(body.outcome).toBeNull();
+    });
+
+    it('should allow a seller to file a dispute with evidence', async () => {
+      const evidence = [
+        'https://example.com/screenshot.png',
+        'ipfs://QmAbc123',
+      ];
+      const res = await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute`)
+        .set('Authorization', `Bearer ${secondAccessToken}`)
+        .send({ reason: 'Payment terms violated', evidence })
+        .expect(201);
+
+      const body = res.body as DisputeResponse;
+      expect(body.filedByUserId).toBe(secondUserId);
+      expect(body.evidence).toEqual(evidence);
+    });
+
+    it('should transition escrow status to disputed', async () => {
+      await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ reason: 'Status transition check' })
+        .expect(201);
+
+      const escrowRes = await request(httpServer)
+        .get(`/escrows/${escrowId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      expect((escrowRes.body as EscrowResponse).status).toBe('disputed');
+    });
+
+    it('should return 400 when escrow is not active (pending)', async () => {
+      const pendingRes = await request(httpServer)
+        .post('/escrows')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          title: 'Pending Escrow',
+          amount: 50,
+          parties: [
+            { userId: secondUserId, role: PartyRole.SELLER },
+            { userId: arbitratorUserId, role: PartyRole.ARBITRATOR },
+          ],
+        });
+      const pendingId = (pendingRes.body as EscrowResponse).id;
+
+      await request(httpServer)
+        .post(`/escrows/${pendingId}/dispute`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ reason: 'Should be rejected' })
+        .expect(400);
+    });
+
+    it('should return 403 when an arbitrator tries to file a dispute', async () => {
+      await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute`)
+        .set('Authorization', `Bearer ${arbitratorAccessToken}`)
+        .send({ reason: 'Arbitrators mediate, not file' })
+        .expect(403);
+    });
+
+    it('should return 409 when a duplicate dispute is filed', async () => {
+      await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ reason: 'First dispute' })
+        .expect(201);
+
+      await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute`)
+        .set('Authorization', `Bearer ${secondAccessToken}`)
+        .send({ reason: 'Second dispute attempt' })
+        .expect(409);
+    });
+
+    it('should return 400 for missing reason', async () => {
+      await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({})
+        .expect(400);
+    });
+
+    it('should return 401 without an auth token', async () => {
+      await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute`)
+        .send({ reason: 'No token' })
+        .expect(401);
+    });
+  });
+
+  describe('GET /escrows/:id/dispute', () => {
+    let escrowId: string;
+
+    beforeEach(async () => {
+      escrowId = await createActiveEscrow();
+      await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          reason: 'Disputed delivery',
+          evidence: ['https://proof.example.com'],
+        });
+    });
+
+    it('should return dispute details for the filing party (buyer)', async () => {
+      const res = await request(httpServer)
+        .get(`/escrows/${escrowId}/dispute`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      const body = res.body as DisputeResponse;
+      expect(body).toHaveProperty('id');
+      expect(body.escrowId).toBe(escrowId);
+      expect(body.reason).toBe('Disputed delivery');
+      expect(body.status).toBe('open');
+      expect(body.evidence).toEqual(['https://proof.example.com']);
+      expect(body.outcome).toBeNull();
+      expect(body.resolvedAt).toBeNull();
+    });
+
+    it('should return dispute details for the seller', async () => {
+      const res = await request(httpServer)
+        .get(`/escrows/${escrowId}/dispute`)
+        .set('Authorization', `Bearer ${secondAccessToken}`)
+        .expect(200);
+
+      expect((res.body as DisputeResponse).reason).toBe('Disputed delivery');
+    });
+
+    it('should return dispute details for the arbitrator', async () => {
+      const res = await request(httpServer)
+        .get(`/escrows/${escrowId}/dispute`)
+        .set('Authorization', `Bearer ${arbitratorAccessToken}`)
+        .expect(200);
+
+      expect((res.body as DisputeResponse).reason).toBe('Disputed delivery');
+    });
+
+    it('should return 404 when no dispute exists for the escrow', async () => {
+      // Create a fresh active escrow with no dispute
+      const freshId = await createActiveEscrow();
+
+      await request(httpServer)
+        .get(`/escrows/${freshId}/dispute`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(404);
+    });
+
+    it('should return 403 for a user who is not a party to the escrow', async () => {
+      // Create a separate escrow that excludes the arbitrator
+      const outsiderRes = await request(httpServer)
+        .post('/escrows')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          title: 'Outsider Test Escrow',
+          amount: 50,
+          parties: [{ userId: secondUserId, role: PartyRole.SELLER }],
+        });
+      const outsiderId = (outsiderRes.body as EscrowResponse).id;
+      await escrowRepository.update(outsiderId, {
+        status: EscrowStatus.ACTIVE,
+      });
+      await request(httpServer)
+        .post(`/escrows/${outsiderId}/dispute`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ reason: 'Outsider test' });
+
+      // arbitratorUserId is NOT a party here — should get 403
+      await request(httpServer)
+        .get(`/escrows/${outsiderId}/dispute`)
+        .set('Authorization', `Bearer ${arbitratorAccessToken}`)
+        .expect(403);
+    });
+  });
+
+  describe('POST /escrows/:id/dispute/resolve', () => {
+    let escrowId: string;
+
+    beforeEach(async () => {
+      escrowId = await createDisputedEscrow();
+    });
+
+    it('should resolve a dispute with outcome released_to_seller', async () => {
+      const res = await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute/resolve`)
+        .set('Authorization', `Bearer ${arbitratorAccessToken}`)
+        .send({
+          outcome: 'released_to_seller',
+          resolutionNotes: 'Seller provided valid proof of delivery',
+        })
+        .expect(201);
+
+      const body = res.body as DisputeResponse;
+      expect(body.status).toBe('resolved');
+      expect(body.outcome).toBe('released_to_seller');
+      expect(body.resolutionNotes).toBe(
+        'Seller provided valid proof of delivery',
+      );
+      expect(body.resolvedByUserId).toBe(arbitratorUserId);
+      expect(body.resolvedAt).not.toBeNull();
+    });
+
+    it('should resolve a dispute with outcome refunded_to_buyer', async () => {
+      const res = await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute/resolve`)
+        .set('Authorization', `Bearer ${arbitratorAccessToken}`)
+        .send({
+          outcome: 'refunded_to_buyer',
+          resolutionNotes: 'Seller failed to deliver',
+        })
+        .expect(201);
+
+      const body = res.body as DisputeResponse;
+      expect(body.status).toBe('resolved');
+      expect(body.outcome).toBe('refunded_to_buyer');
+    });
+
+    it('should resolve a dispute with a split outcome', async () => {
+      const res = await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute/resolve`)
+        .set('Authorization', `Bearer ${arbitratorAccessToken}`)
+        .send({
+          outcome: 'split',
+          resolutionNotes: 'Partial delivery accepted',
+          sellerPercent: 60,
+          buyerPercent: 40,
+        })
+        .expect(201);
+
+      const body = res.body as DisputeResponse;
+      expect(body.status).toBe('resolved');
+      expect(body.outcome).toBe('split');
+      expect(Number(body.sellerPercent)).toBe(60);
+      expect(Number(body.buyerPercent)).toBe(40);
+    });
+
+    it('should transition escrow to completed for released_to_seller', async () => {
+      await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute/resolve`)
+        .set('Authorization', `Bearer ${arbitratorAccessToken}`)
+        .send({
+          outcome: 'released_to_seller',
+          resolutionNotes: 'Seller wins',
+        });
+
+      const escrowRes = await request(httpServer)
+        .get(`/escrows/${escrowId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      expect((escrowRes.body as EscrowResponse).status).toBe('completed');
+    });
+
+    it('should transition escrow to cancelled for refunded_to_buyer', async () => {
+      await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute/resolve`)
+        .set('Authorization', `Bearer ${arbitratorAccessToken}`)
+        .send({ outcome: 'refunded_to_buyer', resolutionNotes: 'Buyer wins' });
+
+      const escrowRes = await request(httpServer)
+        .get(`/escrows/${escrowId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      expect((escrowRes.body as EscrowResponse).status).toBe('cancelled');
+    });
+
+    it('should return 403 when a buyer tries to resolve', async () => {
+      await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute/resolve`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          outcome: 'released_to_seller',
+          resolutionNotes: 'Buyer self-resolving',
+        })
+        .expect(403);
+    });
+
+    it('should return 403 when a seller tries to resolve', async () => {
+      await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute/resolve`)
+        .set('Authorization', `Bearer ${secondAccessToken}`)
+        .send({
+          outcome: 'refunded_to_buyer',
+          resolutionNotes: 'Seller self-resolving',
+        })
+        .expect(403);
+    });
+
+    it('should return 422 when split outcome is missing percentages', async () => {
+      await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute/resolve`)
+        .set('Authorization', `Bearer ${arbitratorAccessToken}`)
+        .send({ outcome: 'split', resolutionNotes: 'Forgot percentages' })
+        .expect(422);
+    });
+
+    it('should return 422 when split percentages do not sum to 100', async () => {
+      await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute/resolve`)
+        .set('Authorization', `Bearer ${arbitratorAccessToken}`)
+        .send({
+          outcome: 'split',
+          resolutionNotes: 'Bad math',
+          sellerPercent: 60,
+          buyerPercent: 30,
+        })
+        .expect(422);
+    });
+
+    it('should return 400 when trying to resolve an already-resolved dispute', async () => {
+      // First resolution succeeds
+      await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute/resolve`)
+        .set('Authorization', `Bearer ${arbitratorAccessToken}`)
+        .send({
+          outcome: 'released_to_seller',
+          resolutionNotes: 'First resolution',
+        })
+        .expect(201);
+
+      // Second attempt: escrow is no longer DISPUTED → 400
+      await request(httpServer)
+        .post(`/escrows/${escrowId}/dispute/resolve`)
+        .set('Authorization', `Bearer ${arbitratorAccessToken}`)
+        .send({
+          outcome: 'refunded_to_buyer',
+          resolutionNotes: 'Second attempt',
+        })
         .expect(400);
     });
   });
