@@ -179,7 +179,11 @@ function decodeBase58(value: string): Uint8Array {
     }
   }
 
-  for (let i = 0; i < value.length && value[i] === BASE58BTC_ALPHABET[0]; i += 1) {
+  for (
+    let i = 0;
+    i < value.length && value[i] === BASE58BTC_ALPHABET[0];
+    i += 1
+  ) {
     bytes.push(0);
   }
 

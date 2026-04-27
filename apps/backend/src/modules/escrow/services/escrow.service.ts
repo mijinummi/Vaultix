@@ -1287,4 +1287,17 @@ export class EscrowService {
       url: this.ipfsService.getGatewayUrl(cid),
     };
   }
+
+  private getErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    if (typeof error === 'object' && error !== null && 'message' in error) {
+      const message = (error as { message?: unknown }).message;
+      return typeof message === 'string' ? message : String(message);
+    }
+
+    return 'Unknown error';
+  }
 }
