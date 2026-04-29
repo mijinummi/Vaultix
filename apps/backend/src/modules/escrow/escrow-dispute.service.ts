@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  ConflictException,
-} from '@nestjs/common';
+import { Injectable, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -9,7 +6,6 @@ import { Dispute, DisputeStatus } from './entities/dispute.entity';
 import { Escrow, EscrowStatus } from './entities/escrow.entity';
 import { validateTransition } from './escrow-state-machine';
 import { DisputeOutcome } from './entities/dispute.entity';
-
 
 @Injectable()
 export class EscrowDisputeService {
@@ -38,10 +34,10 @@ export class EscrowDisputeService {
     });
   }
 
- async resolve(dispute: Dispute, outcome: DisputeOutcome) {
-  dispute.status = DisputeStatus.RESOLVED;
-  dispute.outcome = outcome;
+  async resolve(dispute: Dispute, outcome: DisputeOutcome) {
+    dispute.status = DisputeStatus.RESOLVED;
+    dispute.outcome = outcome;
 
-  return this.disputeRepo.save(dispute);
-}
+    return this.disputeRepo.save(dispute);
+  }
 }

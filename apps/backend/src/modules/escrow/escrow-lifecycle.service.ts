@@ -1,12 +1,8 @@
-import {
-  Injectable,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { Escrow, EscrowStatus } from './entities/escrow.entity';
-// import { Escrow, EscrowStatus } from '../entities/escrow.entity';
 import { Party } from './entities/party.entity';
 import { Condition } from './entities/condition.entity';
 import { EscrowEvent, EscrowEventType } from './entities/escrow-event.entity';
@@ -36,14 +32,14 @@ export class EscrowLifecycleService {
     const saved = await this.escrowRepo.save(escrow);
 
     await this.partyRepo.save(
-      dto.parties.map(p =>
+      dto.parties.map((p) =>
         this.partyRepo.create({ ...p, escrowId: saved.id }),
       ),
     );
 
     if (dto.conditions) {
       await this.conditionRepo.save(
-        dto.conditions.map(c =>
+        dto.conditions.map((c) =>
           this.conditionRepo.create({ ...c, escrowId: saved.id }),
         ),
       );
@@ -54,7 +50,7 @@ export class EscrowLifecycleService {
     return saved;
   }
 
-  async cancel(escrow: Escrow, userId: string) {
+  async cancel(escrow: Escrow, userId: string): Promise<Escrow> {
     validateTransition(escrow.status, EscrowStatus.CANCELLED);
 
     escrow.status = EscrowStatus.CANCELLED;
@@ -65,7 +61,7 @@ export class EscrowLifecycleService {
     return saved;
   }
 
-  async expire(escrow: Escrow) {
+  async expire(escrow: Escrow): Promise<Escrow> {
     validateTransition(escrow.status, EscrowStatus.EXPIRED);
 
     escrow.status = EscrowStatus.EXPIRED;
@@ -76,17 +72,17 @@ export class EscrowLifecycleService {
     return saved;
   }
 
- private async logEvent(
-  escrowId: string,
-  type: EscrowEventType,
-  actorId?: string,
-) {
-  const event = this.eventRepo.create({
-    escrow: { id: escrowId } as any, // 🔥 bypass relation typing safely
-    eventType: type,
-    actor: actorId ?? null,
-  } as any);
+  private async logEvent(
+    escrowId: string,
+    type: EscrowEventType,
+    actorId?: string,
+  ): Promise<void> {
+    const event = this.eventRepo.create({
+      escrow: { id: escrowId },
+      eventType: type,
+      actorId,
+    });
 
-  await this.eventRepo.save(event);
-}
+    await this.eventRepo.save(event);
+  }
 }

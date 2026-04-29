@@ -69,12 +69,11 @@ export class EscrowService {
     private readonly stellarIntegrationService: EscrowStellarIntegrationService,
     private readonly webhookService: WebhookService,
     private readonly ipfsService: IpfsService,
-     private readonly lifecycle: EscrowLifecycleService,
+    private readonly lifecycle: EscrowLifecycleService,
     private readonly funding: EscrowFundingService,
     private readonly dispute: EscrowDisputeService,
     private readonly query: EscrowQueryService,
   ) {}
-
 
   async create(
     dto: CreateEscrowDto,

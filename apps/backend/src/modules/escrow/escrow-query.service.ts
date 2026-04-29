@@ -24,9 +24,7 @@ export class EscrowQueryService {
 
   async findAll(userId: string) {
     return this.escrowRepo.find({
-      where: [
-        { creatorId: userId },
-      ],
+      where: [{ creatorId: userId }],
       order: { createdAt: 'DESC' },
     });
   }
