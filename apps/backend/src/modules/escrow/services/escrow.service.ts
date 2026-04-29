@@ -43,6 +43,10 @@ import { User, UserRole } from '../../user/entities/user.entity';
 import { IpfsService } from '../../ipfs/ipfs.service';
 import { AllowedAsset } from '../../assets/entities/allowed-asset.entity';
 import { normalizeMetadataHash } from '../utils/metadata-hash.util';
+import { EscrowLifecycleService } from '../escrow-lifecycle.service';
+import { EscrowFundingService } from '../escrow-funding.service';
+import { EscrowDisputeService } from '../escrow-dispute.service';
+import { EscrowQueryService } from '../escrow-query.service';
 
 @Injectable()
 export class EscrowService {
@@ -65,7 +69,12 @@ export class EscrowService {
     private readonly stellarIntegrationService: EscrowStellarIntegrationService,
     private readonly webhookService: WebhookService,
     private readonly ipfsService: IpfsService,
+     private readonly lifecycle: EscrowLifecycleService,
+    private readonly funding: EscrowFundingService,
+    private readonly dispute: EscrowDisputeService,
+    private readonly query: EscrowQueryService,
   ) {}
+
 
   async create(
     dto: CreateEscrowDto,
