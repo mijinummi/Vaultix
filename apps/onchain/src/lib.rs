@@ -1476,6 +1476,12 @@ impl VaultixEscrow {
     }
 
     pub fn refund_expired(env: Env, escrow_id: u64, caller: Address) -> Result<(), Error> {
+        // Pause-mode: refund_expired is blocked when the contract is paused.
+        // Rationale: a paused contract is under platform review/incident response;
+        // allowing fund drains during that window would undermine the safety guarantee.
+        // Depositors can call refund_expired once the contract is unpaused.
+        ensure_not_paused(&env)?;
+
         let mut escrow = load_escrow_entry_v2(&env, escrow_id)?;
 
         // Validate deadline has passed

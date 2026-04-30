@@ -2020,6 +2020,161 @@ fn test_refund_expired_authorization_check() {
     assert!(result.is_ok());
 }
 
+// ===============================================================================
+// refund_expired spec-parity tests (#213)
+// Covers: deadline not reached, disputed escrow, fully released escrow, paused contract
+// ===============================================================================
+
+/// Helper: set up a funded escrow ready for refund tests.
+/// Returns (client, depositor, escrow_id, token_client, contract_id).
+fn setup_funded_escrow_for_refund(
+    env: &Env,
+    deadline: u64,
+) -> (
+    VaultixEscrowClient<'_>,
+    Address,
+    u64,
+    token::Client<'_>,
+    Address,
+) {
+    let contract_id = env.register_contract(None, VaultixEscrow);
+    let client = VaultixEscrowClient::new(env, &contract_id);
+
+    let treasury = Address::generate(env);
+    client.initialize(&treasury, &None);
+
+    let depositor = Address::generate(env);
+    let recipient = Address::generate(env);
+    let admin = Address::generate(env);
+    let operator = Address::generate(env);
+    let arbitrator = Address::generate(env);
+    client.init(&admin, &operator, &arbitrator);
+
+    let (token_client, token_admin, token_address) = create_token_contract(env, &admin);
+    token_admin.mint(&depositor, &10_000);
+
+    let escrow_id = 9_001u64;
+    let milestones = vec![
+        env,
+        Milestone {
+            amount: 10_000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Work"),
+        },
+    ];
+
+    client.create_escrow(
+        &escrow_id,
+        &depositor,
+        &recipient,
+        &token_address,
+        &milestones,
+        &deadline,
+        &valid_metadata_hash(env),
+    );
+    token_client.approve(&depositor, &contract_id, &10_000, &200);
+    client.deposit_funds(&escrow_id);
+
+    (client, depositor, escrow_id, token_client, contract_id)
+}
+
+/// Spec: env.ledger().timestamp() must be strictly greater than deadline.
+/// Calling refund_expired at or before the deadline must return DeadlineNotReached.
+#[test]
+fn test_refund_expired_deadline_not_reached() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let deadline = 5_000u64;
+    let (client, depositor, escrow_id, _, _) = setup_funded_escrow_for_refund(&env, deadline);
+
+    // At exactly the deadline — must be rejected (strict >)
+    env.ledger().with_mut(|li| li.timestamp = deadline);
+    let result = client.try_refund_expired(&escrow_id, &depositor);
+    assert_eq!(result, Err(Ok(Error::DeadlineNotReached)));
+
+    // One second before deadline — must also be rejected
+    env.ledger().with_mut(|li| li.timestamp = deadline - 1);
+    let result = client.try_refund_expired(&escrow_id, &depositor);
+    assert_eq!(result, Err(Ok(Error::DeadlineNotReached)));
+}
+
+/// Spec: a Disputed escrow must not be refundable via refund_expired.
+/// Dispute resolution is handled by the arbitrator, not the time-lock path.
+#[test]
+fn test_refund_expired_blocked_when_disputed() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let deadline = 1_000u64;
+    let (client, depositor, escrow_id, _, _) = setup_funded_escrow_for_refund(&env, deadline);
+
+    // Raise a dispute before the deadline passes
+    client.raise_dispute(&escrow_id, &depositor);
+
+    // Advance past deadline
+    env.ledger().with_mut(|li| li.timestamp = deadline + 1);
+
+    let result = client.try_refund_expired(&escrow_id, &depositor);
+    assert_eq!(result, Err(Ok(Error::InvalidStatusForRefund)));
+}
+
+/// Spec: an escrow where all funds have already been released (Completed)
+/// must not allow a second refund.
+#[test]
+fn test_refund_expired_blocked_when_fully_released() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    // Use a far-future deadline so we can release the milestone first
+    let deadline = 9_999_999_999u64;
+    let (client, depositor, escrow_id, _, _) = setup_funded_escrow_for_refund(&env, deadline);
+
+    // Release the only milestone — escrow transitions to Completed
+    client.release_milestone(&escrow_id, &0);
+
+    // Advance past deadline
+    env.ledger().with_mut(|li| li.timestamp = deadline + 1);
+
+    // Completed escrow must be rejected — the contract returns NoFundsToRefund
+    // because total_released == total_amount after all milestones are released.
+    // (The status check for Completed also fires, but balance check comes first.)
+    let result = client.try_refund_expired(&escrow_id, &depositor);
+    assert!(
+        result == Err(Ok(Error::InvalidStatusForRefund))
+            || result == Err(Ok(Error::NoFundsToRefund)),
+        "expected refund to be rejected for a fully-released escrow, got {:?}",
+        result
+    );
+}
+
+/// Spec: refund_expired is blocked when the contract is paused.
+/// Rationale: paused state indicates platform review; fund drains must be prevented.
+/// Depositors can retry once the contract is unpaused.
+#[test]
+fn test_refund_expired_blocked_when_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let deadline = 1_000u64;
+    let (client, depositor, escrow_id, _, _) = setup_funded_escrow_for_refund(&env, deadline);
+
+    // Pause the contract
+    client.set_paused(&true);
+
+    // Advance past deadline
+    env.ledger().with_mut(|li| li.timestamp = deadline + 1);
+
+    // Must be rejected with ContractPaused
+    let result = client.try_refund_expired(&escrow_id, &depositor);
+    assert_eq!(result, Err(Ok(Error::ContractPaused)));
+
+    // Unpause — same call must now succeed
+    client.set_paused(&false);
+    let result = client.try_refund_expired(&escrow_id, &depositor);
+    assert!(result.is_ok());
+}
+
 #[test]
 #[should_panic(expected = "Error(Contract, #28)")]
 fn test_pause_fails_without_operator_initialized() {
