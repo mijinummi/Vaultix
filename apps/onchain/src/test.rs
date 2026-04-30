@@ -1817,7 +1817,7 @@ fn test_refund_expired_authorization_check() {
 fn setup_funded_escrow_for_refund(
     env: &Env,
     deadline: u64,
-) -> (VaultixEscrowClient, Address, u64, token::Client, Address) {
+) -> (VaultixEscrowClient<'_>, Address, u64, token::Client<'_>, Address) {
     let contract_id = env.register_contract(None, VaultixEscrow);
     let client = VaultixEscrowClient::new(env, &contract_id);
 
