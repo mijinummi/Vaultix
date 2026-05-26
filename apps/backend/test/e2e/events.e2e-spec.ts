@@ -9,7 +9,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { RefreshToken } from '../../src/modules/user/entities/refresh-token.entity';
 import { User } from '../../src/modules/user/entities/user.entity';
 import { Escrow } from '../../src/modules/escrow/entities/escrow.entity';
-import { Party, PartyRole } from '../../src/modules/escrow/entities/party.entity';
+import {
+  Party,
+  PartyRole,
+} from '../../src/modules/escrow/entities/party.entity';
 import { Condition } from '../../src/modules/escrow/entities/condition.entity';
 import { EscrowEvent } from '../../src/modules/escrow/entities/escrow-event.entity';
 

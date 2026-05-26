@@ -7,8 +7,8 @@ import { StellarEventListenerService } from './../../src/modules/stellar/service
 import { Keypair } from '@stellar/stellar-sdk';
 
 const mockStellarService = {
-  isValidPublicKey: (key: string) => true,
-  isValidSecretKey: (key: string) => true,
+  isValidPublicKey: (_key: string) => true,
+  isValidSecretKey: (_key: string) => true,
   createKeypair: () => {
     return Keypair.random();
   },
@@ -89,7 +89,3 @@ export async function createTestApp(
 
   return app;
 }
-
-
-
-
