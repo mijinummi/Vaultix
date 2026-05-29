@@ -34,7 +34,6 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async verify(@Body() verifyDto: VerifyDto) {
     return this.authService.verifySignature(
-      verifyDto.walletAddress,
       verifyDto.signature,
       verifyDto.publicKey,
     );

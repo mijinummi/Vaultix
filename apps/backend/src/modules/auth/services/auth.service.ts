@@ -48,10 +48,12 @@ export class AuthService {
   }
 
   async verifySignature(
-    walletAddress: string,
     signature: string,
     publicKey: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
+    // Derive walletAddress from publicKey (trusted source after signature verification)
+    const walletAddress = publicKey;
+
     const user = await this.userService.findByWalletAddress(walletAddress);
 
     if (!user || !user.nonce) {
@@ -73,12 +75,6 @@ export class AuthService {
       }
     } catch {
       throw new UnauthorizedException('Signature verification failed');
-    }
-
-    if (publicKey !== walletAddress) {
-      throw new UnauthorizedException(
-        'Public key does not match wallet address',
-      );
     }
 
     await this.userService.update(user.id, { nonce: undefined });
