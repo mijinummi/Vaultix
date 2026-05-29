@@ -134,6 +134,19 @@ pub struct EscrowCreatedBatchItem {
 }
 
 #[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct EscrowSummary {
+    pub escrow_id: u64,
+    pub depositor: Address,
+    pub recipient: Address,
+    pub token_address: Address,
+    pub total_amount: i128,
+    pub status: EscrowStatus,
+    pub deadline: u64,
+    pub metadata_hash: BytesN<32>,
+}
+
+#[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Role {
     Admin,
@@ -189,6 +202,8 @@ pub struct EscrowCreatedEvent {
     pub recipient: Address,
     pub token_address: Address,
     pub total_amount: i128,
+    pub total_released: i128,
+    pub status: EscrowStatus,
     pub deadline: u64,
     pub metadata_hash: BytesN<32>,
     pub timestamp: u64,
@@ -202,6 +217,8 @@ pub struct EscrowCreatedBatchEventItem {
     pub recipient: Address,
     pub token_address: Address,
     pub total_amount: i128,
+    pub total_released: i128,
+    pub status: EscrowStatus,
     pub deadline: u64,
     pub metadata_hash: BytesN<32>,
 }
@@ -222,6 +239,9 @@ pub struct FundsDepositedEvent {
     pub recipient: Address,
     pub token_address: Address,
     pub total_amount: i128,
+    pub status: EscrowStatus,
+    pub total_released: i128,
+    pub deadline: u64,
     pub timestamp: u64,
 }
 
@@ -237,6 +257,9 @@ pub struct MilestoneReleasedEvent {
     pub payout_amount: i128,
     pub fee_amount: i128,
     pub total_released: i128,
+    pub status: EscrowStatus,
+    pub total_amount: i128,
+    pub deadline: u64,
     pub timestamp: u64,
 }
 
@@ -253,6 +276,9 @@ pub struct DeliveryConfirmedEvent {
     pub payout_amount: i128,
     pub fee_amount: i128,
     pub total_released: i128,
+    pub status: EscrowStatus,
+    pub total_amount: i128,
+    pub deadline: u64,
     pub timestamp: u64,
 }
 
@@ -263,6 +289,10 @@ pub struct DisputeRaisedEvent {
     pub raised_by: Address,
     pub depositor: Address,
     pub recipient: Address,
+    pub status: EscrowStatus,
+    pub total_amount: i128,
+    pub total_released: i128,
+    pub deadline: u64,
     pub timestamp: u64,
 }
 
@@ -275,6 +305,10 @@ pub struct DisputeResolvedEvent {
     pub winner_amount: i128,
     pub other_amount: i128,
     pub resolution: Resolution,
+    pub status: EscrowStatus,
+    pub total_amount: i128,
+    pub total_released: i128,
+    pub deadline: u64,
     pub timestamp: u64,
 }
 
@@ -287,6 +321,10 @@ pub struct EscrowCancelledEvent {
     pub token_address: Address,
     pub refund_amount: i128,
     pub fee_amount: i128,
+    pub status: EscrowStatus,
+    pub total_amount: i128,
+    pub total_released: i128,
+    pub deadline: u64,
     pub timestamp: u64,
 }
 
@@ -296,6 +334,9 @@ pub struct EscrowCompletedEvent {
     pub escrow_id: u64,
     pub completed_by: Address,
     pub total_released: i128,
+    pub status: EscrowStatus,
+    pub total_amount: i128,
+    pub deadline: u64,
     pub timestamp: u64,
 }
 
@@ -307,6 +348,10 @@ pub struct EscrowExpiredRefundedEvent {
     pub token_address: Address,
     pub refund_amount: i128,
     pub fee_amount: i128,
+    pub status: EscrowStatus,
+    pub total_amount: i128,
+    pub total_released: i128,
+    pub deadline: u64,
     pub timestamp: u64,
 }
 
@@ -350,6 +395,7 @@ const BPS_DENOMINATOR: i128 = 10000;
 const MAX_BATCH_SIZE: u32 = 20;
 const EVENT_NAMESPACE: &str = "Vaultix";
 const EVENT_SCHEMA_VERSION: &str = "v1";
+const MAX_PAGE_SIZE: u32 = 100;
 
 #[derive(Clone, Debug)]
 struct ReleaseOutcome {
@@ -824,6 +870,30 @@ impl VaultixEscrow {
 
         store_escrow_entry_v2(&env, escrow_id, &escrow);
 
+        // Add to depositor index
+        let depositor_index_key = get_depositor_index_key(&depositor);
+        let mut depositor_escrows: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&depositor_index_key)
+            .unwrap_or_else(|| Vec::new(&env));
+        depositor_escrows.push_back(escrow_id);
+        env.storage()
+            .persistent()
+            .set(&depositor_index_key, &depositor_escrows);
+
+        // Add to recipient index
+        let recipient_index_key = get_recipient_index_key(&recipient);
+        let mut recipient_escrows: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&recipient_index_key)
+            .unwrap_or_else(|| Vec::new(&env));
+        recipient_escrows.push_back(escrow_id);
+        env.storage()
+            .persistent()
+            .set(&recipient_index_key, &recipient_escrows);
+
         env.events().publish(
             event_topic(&env, "EscrowCreated"),
             EscrowCreatedEvent {
@@ -832,6 +902,8 @@ impl VaultixEscrow {
                 recipient,
                 token_address,
                 total_amount,
+                total_released: 0,
+                status: EscrowStatus::Created,
                 deadline,
                 metadata_hash,
                 timestamp: current_timestamp(&env),
@@ -938,6 +1010,8 @@ impl VaultixEscrow {
                 recipient,
                 token_address,
                 total_amount,
+                total_released: 0,
+                status: EscrowStatus::Created,
                 deadline,
                 metadata_hash: request.metadata_hash.clone(),
             });
@@ -955,6 +1029,30 @@ impl VaultixEscrow {
             }
 
             store_escrow_entry_v2(&env, escrow_id, &escrow);
+
+            // Add to depositor index
+            let depositor_index_key = get_depositor_index_key(&escrow.depositor);
+            let mut depositor_escrows: Vec<u64> = env
+                .storage()
+                .persistent()
+                .get(&depositor_index_key)
+                .unwrap_or_else(|| Vec::new(&env));
+            depositor_escrows.push_back(escrow_id);
+            env.storage()
+                .persistent()
+                .set(&depositor_index_key, &depositor_escrows);
+
+            // Add to recipient index
+            let recipient_index_key = get_recipient_index_key(&escrow.recipient);
+            let mut recipient_escrows: Vec<u64> = env
+                .storage()
+                .persistent()
+                .get(&recipient_index_key)
+                .unwrap_or_else(|| Vec::new(&env));
+            recipient_escrows.push_back(escrow_id);
+            env.storage()
+                .persistent()
+                .set(&recipient_index_key, &recipient_escrows);
         }
 
         if !created_items.is_empty() {
@@ -1013,6 +1111,9 @@ impl VaultixEscrow {
                 recipient: escrow.recipient.clone(),
                 token_address: escrow.token_address.clone(),
                 total_amount: escrow.total_amount,
+                status: escrow_status(&escrow),
+                total_released: escrow.total_released,
+                deadline: escrow.deadline,
                 timestamp: current_timestamp(&env),
             },
         );
@@ -1058,6 +1159,77 @@ impl VaultixEscrow {
     pub fn get_escrow(env: Env, escrow_id: u64) -> Result<Escrow, Error> {
         let escrow = load_escrow_entry_v2(&env, escrow_id)?;
         Ok(escrow_entry_to_public(escrow))
+    }
+
+    /// List escrows by party address (depositor or recipient) with pagination
+    ///
+    /// # Arguments
+    /// * `env` - Soroban environment reference
+    /// * `party` - Address to query (either depositor or recipient)
+    /// * `role` - "depositor" or "recipient" to specify which index to query
+    /// * `page` - Page number (0-indexed)
+    /// * `page_size` - Number of results per page (max MAX_PAGE_SIZE)
+    ///
+    /// # Returns
+    /// Vec<EscrowSummary> - Lightweight escrow summaries for the page
+    pub fn list_escrows_by_party(
+        env: Env,
+        party: Address,
+        role: Symbol,
+        page: u32,
+        page_size: u32,
+    ) -> Result<Vec<EscrowSummary>, Error> {
+        // Enforce page size limit
+        if page_size == 0 || page_size > MAX_PAGE_SIZE {
+            return Err(Error::VectorTooLarge);
+        }
+
+        // Get the appropriate index based on role
+        let index_key = if role == symbol_short!("depositor") {
+            get_depositor_index_key(&party)
+        } else if role == symbol_short!("recipient") {
+            get_recipient_index_key(&party)
+        } else {
+            return Err(Error::Unauthorized);
+        };
+
+        // Get the list of escrow IDs for this party
+        let escrow_ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&index_key)
+            .unwrap_or_else(|| Vec::new(&env));
+
+        // Calculate pagination bounds
+        let total = escrow_ids.len();
+        let start_idx = page * page_size;
+        let end_idx = core::cmp::min(start_idx + page_size, total);
+
+        if start_idx >= total {
+            // Page is out of bounds, return empty result
+            return Ok(Vec::new(&env));
+        }
+
+        // Collect escrow summaries for the page
+        let mut summaries = Vec::new(&env);
+        for i in start_idx..end_idx {
+            let escrow_id = escrow_ids.get(i).unwrap();
+            if let Ok(escrow) = load_escrow_entry_v2(&env, escrow_id) {
+                let summary = EscrowSummary {
+                    escrow_id,
+                    depositor: escrow.depositor.clone(),
+                    recipient: escrow.recipient.clone(),
+                    token_address: escrow.token_address.clone(),
+                    total_amount: escrow.total_amount,
+                    status: escrow_status(&escrow),
+                    deadline: escrow.deadline,
+                    metadata_hash: escrow.metadata_hash.clone(),
+                };
+                summaries.push_back(summary);
+            }
+        }
+
+        Ok(summaries)
     }
 
     pub fn get_state(env: Env, escrow_id: u64) -> Result<EscrowStatus, Error> {
@@ -1116,6 +1288,9 @@ impl VaultixEscrow {
                 payout_amount: release.payout_amount,
                 fee_amount: release.fee_amount,
                 total_released: release.total_released,
+                status: escrow_status(&escrow),
+                total_amount: escrow.total_amount,
+                deadline: escrow.deadline,
                 timestamp: current_timestamp(&env),
             },
         );
@@ -1175,6 +1350,9 @@ impl VaultixEscrow {
                 payout_amount: release.payout_amount,
                 fee_amount: release.fee_amount,
                 total_released: release.total_released,
+                status: escrow_status(&escrow),
+                total_amount: escrow.total_amount,
+                deadline: escrow.deadline,
                 timestamp: current_timestamp(&env),
             },
         );
@@ -1222,6 +1400,10 @@ impl VaultixEscrow {
                 raised_by: caller,
                 depositor: escrow.depositor.clone(),
                 recipient: escrow.recipient.clone(),
+                status: escrow_status(&escrow),
+                total_amount: escrow.total_amount,
+                total_released: escrow.total_released,
+                deadline: escrow.deadline,
                 timestamp: current_timestamp(&env),
             },
         );
@@ -1367,6 +1549,10 @@ impl VaultixEscrow {
                 winner_amount: amount_to_winner,
                 other_amount: amount_to_other,
                 resolution,
+                status: escrow_status(&escrow),
+                total_amount: escrow.total_amount,
+                total_released: escrow.total_released,
+                deadline: escrow.deadline,
                 timestamp: current_timestamp(&env),
             },
         );
@@ -1439,6 +1625,10 @@ impl VaultixEscrow {
                 token_address: escrow.token_address.clone(),
                 refund_amount,
                 fee_amount,
+                status: escrow_status(&escrow),
+                total_amount: escrow.total_amount,
+                total_released: escrow.total_released,
+                deadline: escrow.deadline,
                 timestamp: current_timestamp(&env),
             },
         );
@@ -1468,6 +1658,9 @@ impl VaultixEscrow {
                 escrow_id,
                 completed_by: escrow.depositor.clone(),
                 total_released: escrow.total_released,
+                status: escrow_status(&escrow),
+                total_amount: escrow.total_amount,
+                deadline: escrow.deadline,
                 timestamp: current_timestamp(&env),
             },
         );
@@ -1564,6 +1757,10 @@ impl VaultixEscrow {
                 token_address: escrow.token_address.clone(),
                 refund_amount,
                 fee_amount: platform_fee,
+                status: escrow_status(&escrow),
+                total_amount: escrow.total_amount,
+                total_released: escrow.total_released,
+                deadline: escrow.deadline,
                 timestamp: current_time,
             },
         );
@@ -1602,6 +1799,18 @@ fn get_token_fee_key(token_address: &Address) -> (Symbol, Address) {
 /// Returns a tuple of (Symbol, u64) for scoped storage access
 fn get_escrow_fee_key(escrow_id: u64) -> (Symbol, u64) {
     (symbol_short!("escfee"), escrow_id)
+}
+
+/// Generates storage key for depositor index
+/// Returns a tuple of (Symbol, Address) for scoped storage access
+fn get_depositor_index_key(depositor: &Address) -> (Symbol, Address) {
+    (symbol_short!("depidx"), depositor.clone())
+}
+
+/// Generates storage key for recipient index
+/// Returns a tuple of (Symbol, Address) for scoped storage access
+fn get_recipient_index_key(recipient: &Address) -> (Symbol, Address) {
+    (symbol_short!("recidx"), recipient.clone())
 }
 
 fn resolve_fee_with_escrow_override(
