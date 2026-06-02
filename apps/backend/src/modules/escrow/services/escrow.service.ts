@@ -851,6 +851,7 @@ export class EscrowService {
       data: event.data,
       ipAddress: event.ipAddress,
       createdAt: event.createdAt,
+      cursor: event.cursor,
       escrow: event.escrow
         ? {
             id: event.escrow.id,
@@ -1260,7 +1261,7 @@ export class EscrowService {
     // Check if user is depositor or arbitrator
     const isDepositor = escrow.creatorId === userId;
     const isArbitrator = escrow.parties.some(
-      (party) => party.userId === userId && party.role === 'arbitrator',
+      (party) => party.userId === userId && party.role === PartyRole.ARBITRATOR,
     );
 
     if (!isDepositor && !isArbitrator) {
@@ -1286,7 +1287,7 @@ export class EscrowService {
     }
 
     // Get the seller/recipient
-    const seller = escrow.parties.find((p) => p.role === 'seller');
+    const seller = escrow.parties.find((p) => p.role === PartyRole.SELLER);
     if (!seller) {
       throw new BadRequestException('No seller found for this escrow');
     }
@@ -1322,7 +1323,7 @@ export class EscrowService {
     // Log the event
     await this.logEvent(
       escrowId,
-      'milestone_released' as any,
+      EscrowEventType.MILESTONE_RELEASED,
       userId,
       { conditionId, amount: releaseAmount },
     );

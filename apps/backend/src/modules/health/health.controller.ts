@@ -3,12 +3,24 @@ import {
   HealthCheck,
   HealthCheckService,
   HealthCheckResult,
-  HealthIndicatorFunction,
+  HealthIndicatorResult,
 } from '@nestjs/terminus';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../user/entities/user.entity';
-import { Escrow } from '../escrow/entities/escrow.entity';
+import { Escrow, EscrowStatus } from '../escrow/entities/escrow.entity';
+
+interface HealthInfo {
+  version: string;
+  nodeVersion: string;
+  uptime: number;
+  network: string;
+  databaseType: string;
+  metrics: {
+    activeEscrows: number;
+    totalUsers: number;
+  };
+}
 
 @Controller('health')
 export class HealthController {
@@ -42,9 +54,9 @@ export class HealthController {
   }
 
   @Get('info')
-  async info(): Promise<any> {
+  async info(): Promise<HealthInfo> {
     const activeEscrows = await this.escrowRepository.count({
-      where: { status: 'active' },
+      where: { status: EscrowStatus.ACTIVE },
     });
     const totalUsers = await this.userRepository.count();
 
@@ -61,7 +73,7 @@ export class HealthController {
     };
   }
 
-  private async checkDatabase(): Promise<any> {
+  private async checkDatabase(): Promise<HealthIndicatorResult> {
     try {
       await this.userRepository.query('SELECT 1');
       return {
@@ -79,7 +91,7 @@ export class HealthController {
     }
   }
 
-  private checkMemory(): any {
+  private checkMemory(): HealthIndicatorResult {
     const memUsage = process.memoryUsage();
     const heapTotal = memUsage.heapTotal;
     const heapUsed = memUsage.heapUsed;
@@ -106,7 +118,7 @@ export class HealthController {
     };
   }
 
-  private checkDisk(): any {
+  private checkDisk(): HealthIndicatorResult {
     // For simplicity, we'll just return up for now (real implementation would check disk space)
     return {
       disk: {

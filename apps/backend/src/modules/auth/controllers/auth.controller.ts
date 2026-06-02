@@ -7,14 +7,13 @@ import {
   Req,
   HttpCode,
   HttpStatus,
-  Res,
   Patch,
   Query,
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Request, Response } from 'express';
+import { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from '../services/auth.service';
 import {
@@ -35,14 +34,14 @@ export class AuthController {
   @Post('challenge')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 10, ttl: 60000 } })
-  async challenge(@Body() challengeDto: ChallengeDto, @Res({ passthrough: true }) res: Response) {
+  async challenge(@Body() challengeDto: ChallengeDto) {
     return this.authService.generateChallenge(challengeDto.walletAddress);
   }
 
   @Post('verify')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
-  async verify(@Body() verifyDto: VerifyDto, @Res({ passthrough: true }) res: Response) {
+  async verify(@Body() verifyDto: VerifyDto) {
     return this.authService.verifySignature(
       verifyDto.signature,
       verifyDto.publicKey,
@@ -52,7 +51,7 @@ export class AuthController {
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 20, ttl: 60000 } })
-  async refresh(@Body() refreshTokenDto: RefreshTokenDto, @Res({ passthrough: true }) res: Response) {
+  async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
     return this.authService.refreshAccessToken(refreshTokenDto.refreshToken);
   }
 
@@ -125,7 +124,7 @@ export class AuthController {
   @UseGuards(AuthGuard)
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 10, ttl: 60000 } })
-  async logout(@Body() logoutDto: LogoutDto, @Res({ passthrough: true }) res: Response) {
+  async logout(@Body() logoutDto: LogoutDto) {
     await this.authService.logout(logoutDto.refreshToken);
     return { message: 'Successfully logged out' };
   }
