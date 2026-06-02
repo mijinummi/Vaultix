@@ -9,7 +9,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
 import { Escrow, EscrowStatus, EscrowType } from '../entities/escrow.entity';
-import { Party, PartyRole } from '../entities/party.entity';
+import { Party, PartyRole, PartyStatus } from '../entities/party.entity';
 import { Condition } from '../entities/condition.entity';
 import { EscrowEvent, EscrowEventType } from '../entities/escrow-event.entity';
 import {
@@ -42,6 +42,8 @@ import { WebhookService } from '../../../services/webhook/webhook.service';
 import { User, UserRole } from '../../user/entities/user.entity';
 import { IpfsService } from '../../ipfs/ipfs.service';
 import { AllowedAsset } from '../../assets/entities/allowed-asset.entity';
+import { NotificationService } from '../../../notifications/notifications.service';
+import { NotificationEventType } from '../../../notifications/enums/notification-event.enum';
 
 @Injectable()
 export class EscrowService {
@@ -64,6 +66,7 @@ export class EscrowService {
     private readonly stellarIntegrationService: EscrowStellarIntegrationService,
     private readonly webhookService: WebhookService,
     private readonly ipfsService: IpfsService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async create(
@@ -95,6 +98,22 @@ export class EscrowService {
       }),
     );
     await this.partyRepository.save(parties);
+
+    // Notify each invited party (fire-and-forget; failures must not block escrow creation)
+    for (const partyDto of dto.parties) {
+      const invitedUser = await this.userRepository.findOne({
+        where: { id: partyDto.userId },
+      });
+      this.notificationService
+        .handleEscrowEvent(partyDto.userId, NotificationEventType.PARTY_INVITED, {
+          escrowId: savedEscrow.id,
+          escrowTitle: savedEscrow.title,
+          role: partyDto.role,
+          invitedBy: creatorId,
+          email: invitedUser?.email ?? undefined,
+        })
+        .catch(() => undefined);
+    }
 
     if (dto.conditions && dto.conditions.length > 0) {
       const conditions = dto.conditions.map((conditionDto) =>
@@ -474,6 +493,17 @@ export class EscrowService {
 
     if (escrow.stellarTxHash) {
       throw new BadRequestException('Escrow is already funded');
+    }
+
+    const unacceptedRequired = (escrow.parties ?? []).filter(
+      (p) =>
+        (p.role === PartyRole.BUYER || p.role === PartyRole.SELLER) &&
+        p.status !== PartyStatus.ACCEPTED,
+    );
+    if (unacceptedRequired.length > 0) {
+      throw new BadRequestException(
+        'All buyer and seller parties must accept their invitation before the escrow can be funded',
+      );
     }
 
     const escrowAmount = Number(escrow.amount);
@@ -1161,6 +1191,110 @@ export class EscrowService {
 
     await this.conditionRepository.save(condition);
     return condition;
+  }
+
+  async acceptPartyInvitation(
+    escrowId: string,
+    partyId: string,
+    userId: string,
+    ipAddress?: string,
+  ): Promise<Party> {
+    const party = await this.partyRepository.findOne({
+      where: { id: partyId, escrowId },
+      relations: ['escrow'],
+    });
+
+    if (!party) throw new NotFoundException('Party invitation not found');
+    if (party.userId !== userId)
+      throw new ForbiddenException('You can only respond to your own invitation');
+    if (party.status !== PartyStatus.PENDING)
+      throw new BadRequestException(`Invitation already ${party.status}`);
+
+    party.status = PartyStatus.ACCEPTED;
+    party.respondedAt = new Date();
+    await this.partyRepository.save(party);
+
+    await this.logEvent(escrowId, EscrowEventType.PARTY_ACCEPTED, userId, { partyId }, ipAddress);
+
+    const escrow = party.escrow;
+    if (escrow?.creatorId) {
+      const acceptedUser = await this.userRepository.findOne({ where: { id: userId } });
+      this.notificationService
+        .handleEscrowEvent(escrow.creatorId, NotificationEventType.PARTY_ACCEPTED, {
+          escrowId,
+          escrowTitle: escrow.title,
+          role: party.role,
+          acceptedByUserId: userId,
+          email: acceptedUser?.email ?? undefined,
+        })
+        .catch(() => undefined);
+    }
+
+    return party;
+  }
+
+  async rejectPartyInvitation(
+    escrowId: string,
+    partyId: string,
+    userId: string,
+    ipAddress?: string,
+  ): Promise<Party> {
+    const party = await this.partyRepository.findOne({
+      where: { id: partyId, escrowId },
+      relations: ['escrow'],
+    });
+
+    if (!party) throw new NotFoundException('Party invitation not found');
+    if (party.userId !== userId)
+      throw new ForbiddenException('You can only respond to your own invitation');
+    if (party.status !== PartyStatus.PENDING)
+      throw new BadRequestException(`Invitation already ${party.status}`);
+
+    party.status = PartyStatus.REJECTED;
+    party.respondedAt = new Date();
+    await this.partyRepository.save(party);
+
+    await this.logEvent(escrowId, EscrowEventType.PARTY_REJECTED, userId, { partyId }, ipAddress);
+
+    const escrow = party.escrow;
+    if (escrow) {
+      const rejectedUser = await this.userRepository.findOne({ where: { id: userId } });
+
+      if (escrow.creatorId) {
+        this.notificationService
+          .handleEscrowEvent(escrow.creatorId, NotificationEventType.PARTY_REJECTED, {
+            escrowId,
+            escrowTitle: escrow.title,
+            role: party.role,
+            rejectedByUserId: userId,
+            email: rejectedUser?.email ?? undefined,
+          })
+          .catch(() => undefined);
+      }
+
+      // Auto-cancel when a required party (buyer or seller) rejects a PENDING escrow
+      const isRequired = party.role === PartyRole.BUYER || party.role === PartyRole.SELLER;
+      if (isRequired && escrow.status === EscrowStatus.PENDING) {
+        await this.escrowRepository.update(escrowId, { status: EscrowStatus.CANCELLED });
+        await this.logEvent(
+          escrowId,
+          EscrowEventType.CANCELLED,
+          userId,
+          { reason: `Required party (${party.role}) rejected the invitation` },
+          ipAddress,
+        );
+        await this.webhookService.dispatchEvent('escrow.cancelled', { escrowId });
+      }
+    }
+
+    return party;
+  }
+
+  async getPendingInvitations(userId: string): Promise<Party[]> {
+    return this.partyRepository.find({
+      where: { userId, status: PartyStatus.PENDING },
+      relations: ['escrow', 'escrow.parties', 'escrow.creator'],
+    });
   }
 
   private async logEvent(

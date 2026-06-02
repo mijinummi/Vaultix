@@ -96,6 +96,12 @@ export class EscrowController {
     return this.escrowService.findOverview(userId, query);
   }
 
+  @Get('pending-invitations')
+  @ApiOperation({ summary: 'List escrows where the authenticated user has a pending party invitation' })
+  async getPendingInvitations(@Request() req: AuthenticatedRequest) {
+    return this.escrowService.getPendingInvitations(this.getAuthenticatedUserId(req));
+  }
+
   @Get(':id')
   @UseGuards(EscrowAccessGuard)
   async findOne(@Param('id') id: string) {
@@ -266,6 +272,40 @@ export class EscrowController {
       escrowId,
       conditionId,
       this.getAuthenticatedUserId(req),
+    );
+  }
+
+  @Post(':id/parties/:partyId/accept')
+  @UseGuards(EscrowAccessGuard)
+  @ApiOperation({ summary: 'Accept a party invitation for an escrow' })
+  async acceptPartyInvitation(
+    @Param('id') escrowId: string,
+    @Param('partyId') partyId: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    const ipAddress = req.ip || req.socket?.remoteAddress;
+    return this.escrowService.acceptPartyInvitation(
+      escrowId,
+      partyId,
+      this.getAuthenticatedUserId(req),
+      ipAddress,
+    );
+  }
+
+  @Post(':id/parties/:partyId/reject')
+  @UseGuards(EscrowAccessGuard)
+  @ApiOperation({ summary: 'Reject a party invitation for an escrow' })
+  async rejectPartyInvitation(
+    @Param('id') escrowId: string,
+    @Param('partyId') partyId: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    const ipAddress = req.ip || req.socket?.remoteAddress;
+    return this.escrowService.rejectPartyInvitation(
+      escrowId,
+      partyId,
+      this.getAuthenticatedUserId(req),
+      ipAddress,
     );
   }
 
