@@ -190,7 +190,8 @@ pub struct FeeUpdatedEvent {
 #[derive(Clone, Debug, PartialEq)]
 pub struct PausedToggledEvent {
     pub paused: bool,
-    pub operator: Address,
+    pub caller: Address,
+    pub caller_role: Role,
     pub timestamp: u64,
 }
 
@@ -635,7 +636,8 @@ impl VaultixEscrow {
             event_topic(&env, "PausedToggled"),
             PausedToggledEvent {
                 paused,
-                operator,
+                caller: operator,
+                caller_role: Role::Operator,
                 timestamp: current_timestamp(&env),
             },
         );
@@ -1714,12 +1716,6 @@ impl VaultixEscrow {
     }
 
     pub fn refund_expired(env: Env, escrow_id: u64, caller: Address) -> Result<(), Error> {
-        // Pause-mode: refund_expired is blocked when the contract is paused.
-        // Rationale: a paused contract is under platform review/incident response;
-        // allowing fund drains during that window would undermine the safety guarantee.
-        // Depositors can call refund_expired once the contract is unpaused.
-        ensure_not_paused(&env)?;
-
         let mut escrow = load_escrow_entry_v2(&env, escrow_id)?;
 
         // Validate deadline has passed
