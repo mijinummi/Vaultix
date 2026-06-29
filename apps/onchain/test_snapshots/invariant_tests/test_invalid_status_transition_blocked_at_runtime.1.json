@@ -1,6 +1,6 @@
 {
   "generators": {
-    "address": 5,
+    "address": 8,
     "nonce": 0
   },
   "auth": [
@@ -30,9 +30,6 @@
       ]
     ],
     [],
-    [],
-    [],
-    [],
     []
   ],
   "ledger": {
@@ -55,7 +52,7 @@
                   "symbol": "esc2"
                 },
                 {
-                  "u64": 42
+                  "u64": 55
                 }
               ]
             },
@@ -75,7 +72,7 @@
                       "symbol": "esc2"
                     },
                     {
-                      "u64": 42
+                      "u64": 55
                     }
                   ]
                 },
@@ -95,7 +92,7 @@
                         "symbol": "deadline"
                       },
                       "val": {
-                        "u64": 1706400000
+                        "u64": 9999
                       }
                     },
                     {
@@ -112,8 +109,8 @@
                       },
                       "val": {
                         "i128": {
-                          "hi": 0,
-                          "lo": 75
+                          "hi": -1,
+                          "lo": 18446744073709551615
                         }
                       }
                     },
@@ -122,7 +119,7 @@
                         "symbol": "metadata_hash"
                       },
                       "val": {
-                        "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
+                        "bytes": "0909090909090909090909090909090909090909090909090909090909090909"
                       }
                     },
                     {
@@ -140,7 +137,7 @@
                                 "val": {
                                   "i128": {
                                     "hi": 0,
-                                    "lo": 500
+                                    "lo": 4000
                                   }
                                 }
                               },
@@ -149,7 +146,7 @@
                                   "symbol": "description"
                                 },
                                 "val": {
-                                  "symbol": "legacy"
+                                  "symbol": "M1"
                                 }
                               },
                               {
@@ -159,7 +156,42 @@
                                 "val": {
                                   "vec": [
                                     {
-                                      "symbol": "Pending"
+                                      "symbol": "Released"
+                                    }
+                                  ]
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "amount"
+                                },
+                                "val": {
+                                  "i128": {
+                                    "hi": 0,
+                                    "lo": 6000
+                                  }
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "description"
+                                },
+                                "val": {
+                                  "symbol": "M2"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "status"
+                                },
+                                "val": {
+                                  "vec": [
+                                    {
+                                      "symbol": "Released"
                                     }
                                   ]
                                 }
@@ -174,7 +206,7 @@
                         "symbol": "packed_state"
                       },
                       "val": {
-                        "u32": 0
+                        "u32": 2
                       }
                     },
                     {
@@ -219,7 +251,7 @@
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 500
+                          "lo": 10000
                         }
                       }
                     },
@@ -230,7 +262,7 @@
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 0
+                          "lo": 10000
                         }
                       }
                     }
@@ -253,7 +285,7 @@
                   "symbol": "escver"
                 },
                 {
-                  "u64": 42
+                  "u64": 55
                 }
               ]
             },
@@ -273,7 +305,7 @@
                       "symbol": "escver"
                     },
                     {
-                      "u64": 42
+                      "u64": 55
                     }
                   ]
                 },
@@ -644,13 +676,13 @@
                 "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
               },
               {
-                "symbol": "test_set_legacy_escrow"
+                "symbol": "test_store_escrow_raw"
               }
             ],
             "data": {
               "vec": [
                 {
-                  "u64": 42
+                  "u64": 55
                 },
                 {
                   "map": [
@@ -667,7 +699,7 @@
                         "symbol": "deadline"
                       },
                       "val": {
-                        "u64": 1706400000
+                        "u64": 9999
                       }
                     },
                     {
@@ -680,10 +712,21 @@
                     },
                     {
                       "key": {
+                        "symbol": "fee_override_bps"
+                      },
+                      "val": {
+                        "i128": {
+                          "hi": -1,
+                          "lo": 18446744073709551615
+                        }
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "metadata_hash"
                       },
                       "val": {
-                        "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
+                        "bytes": "0909090909090909090909090909090909090909090909090909090909090909"
                       }
                     },
                     {
@@ -691,7 +734,86 @@
                         "symbol": "milestones"
                       },
                       "val": {
-                        "vec": []
+                        "vec": [
+                          {
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "amount"
+                                },
+                                "val": {
+                                  "i128": {
+                                    "hi": 0,
+                                    "lo": 4000
+                                  }
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "description"
+                                },
+                                "val": {
+                                  "symbol": "M1"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "status"
+                                },
+                                "val": {
+                                  "vec": [
+                                    {
+                                      "symbol": "Released"
+                                    }
+                                  ]
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "amount"
+                                },
+                                "val": {
+                                  "i128": {
+                                    "hi": 0,
+                                    "lo": 6000
+                                  }
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "description"
+                                },
+                                "val": {
+                                  "symbol": "M2"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "status"
+                                },
+                                "val": {
+                                  "vec": [
+                                    {
+                                      "symbol": "Released"
+                                    }
+                                  ]
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "packed_state"
+                      },
+                      "val": {
+                        "u32": 2
                       }
                     },
                     {
@@ -708,30 +830,6 @@
                       },
                       "val": {
                         "u32": 1
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "resolution"
-                      },
-                      "val": {
-                        "vec": [
-                          {
-                            "symbol": "None"
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "status"
-                      },
-                      "val": {
-                        "vec": [
-                          {
-                            "symbol": "Created"
-                          }
-                        ]
                       }
                     },
                     {
@@ -760,7 +858,7 @@
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 500
+                          "lo": 10000
                         }
                       }
                     },
@@ -771,17 +869,11 @@
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 0
+                          "lo": 10000
                         }
                       }
                     }
                   ]
-                },
-                {
-                  "i128": {
-                    "hi": 0,
-                    "lo": 75
-                  }
                 }
               ]
             }
@@ -802,7 +894,7 @@
                 "symbol": "fn_return"
               },
               {
-                "symbol": "test_set_legacy_escrow"
+                "symbol": "test_store_escrow_raw"
               }
             ],
             "data": "void"
@@ -826,11 +918,11 @@
                 "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
               },
               {
-                "symbol": "get_escrow"
+                "symbol": "cancel_escrow"
               }
             ],
             "data": {
-              "u64": 42
+              "u64": 55
             }
           }
         }
@@ -849,319 +941,77 @@
                 "symbol": "fn_return"
               },
               {
-                "symbol": "get_escrow"
+                "symbol": "cancel_escrow"
               }
             ],
             "data": {
-              "map": [
+              "error": {
+                "contract": 20
+              }
+            }
+          }
+        }
+      },
+      "failed_call": true
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "error"
+              },
+              {
+                "error": {
+                  "contract": 20
+                }
+              }
+            ],
+            "data": {
+              "string": "escalating Ok(ScErrorType::Contract) frame-exit to Err"
+            }
+          }
+        }
+      },
+      "failed_call": true
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": null,
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "error"
+              },
+              {
+                "error": {
+                  "contract": 20
+                }
+              }
+            ],
+            "data": {
+              "vec": [
                 {
-                  "key": {
-                    "symbol": "collected_signatures"
-                  },
-                  "val": {
-                    "vec": []
-                  }
+                  "string": "contract try_call failed"
                 },
                 {
-                  "key": {
-                    "symbol": "deadline"
-                  },
-                  "val": {
-                    "u64": 1706400000
-                  }
+                  "symbol": "cancel_escrow"
                 },
                 {
-                  "key": {
-                    "symbol": "depositor"
-                  },
-                  "val": {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "metadata_hash"
-                  },
-                  "val": {
-                    "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "milestones"
-                  },
-                  "val": {
-                    "vec": [
-                      {
-                        "map": [
-                          {
-                            "key": {
-                              "symbol": "amount"
-                            },
-                            "val": {
-                              "i128": {
-                                "hi": 0,
-                                "lo": 500
-                              }
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "description"
-                            },
-                            "val": {
-                              "symbol": "legacy"
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "status"
-                            },
-                            "val": {
-                              "vec": [
-                                {
-                                  "symbol": "Pending"
-                                }
-                              ]
-                            }
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "recipient"
-                  },
-                  "val": {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "required_signatures"
-                  },
-                  "val": {
-                    "u32": 1
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "resolution"
-                  },
-                  "val": {
-                    "vec": [
-                      {
-                        "symbol": "None"
-                      }
-                    ]
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "status"
-                  },
-                  "val": {
-                    "vec": [
-                      {
-                        "symbol": "Created"
-                      }
-                    ]
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "threshold_amount"
-                  },
-                  "val": {
-                    "i128": {
-                      "hi": 0,
-                      "lo": 10000
+                  "vec": [
+                    {
+                      "u64": 55
                     }
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "token_address"
-                  },
-                  "val": {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "total_amount"
-                  },
-                  "val": {
-                    "i128": {
-                      "hi": 0,
-                      "lo": 500
-                    }
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "total_released"
-                  },
-                  "val": {
-                    "i128": {
-                      "hi": 0,
-                      "lo": 0
-                    }
-                  }
+                  ]
                 }
               ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": null,
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_call"
-              },
-              {
-                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
-              },
-              {
-                "symbol": "test_has_escrow_v2"
-              }
-            ],
-            "data": {
-              "u64": 42
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_return"
-              },
-              {
-                "symbol": "test_has_escrow_v2"
-              }
-            ],
-            "data": {
-              "bool": true
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": null,
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_call"
-              },
-              {
-                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
-              },
-              {
-                "symbol": "test_has_legacy_escrow"
-              }
-            ],
-            "data": {
-              "u64": 42
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_return"
-              },
-              {
-                "symbol": "test_has_legacy_escrow"
-              }
-            ],
-            "data": {
-              "bool": false
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": null,
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_call"
-              },
-              {
-                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
-              },
-              {
-                "symbol": "test_get_escrow_version"
-              }
-            ],
-            "data": {
-              "u64": 42
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_return"
-              },
-              {
-                "symbol": "test_get_escrow_version"
-              }
-            ],
-            "data": {
-              "i128": {
-                "hi": 0,
-                "lo": 2
-              }
             }
           }
         }
